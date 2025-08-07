@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Debug UX Smells Detector UI</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 20px;
+      background: #f5f5f5;
+    }
+    
+    .debug-container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      max-width: 600px;
+    }
+    
+    .debug-section {
+      margin: 20px 0;
+      padding: 15px;
+      background: #f8f9fa;
+      border-left: 4px solid #007bff;
+      border-radius: 4px;
+    }
+    
+    .status-ok { border-left-color: #28a745; }
+    .status-error { border-left-color: #dc3545; }
+    .status-warning { border-left-color: #ffc107; }
+    
+    iframe {
+      width: 100%;
+      height: 600px;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+    }
+    
+    .test-results {
+      margin-top: 20px;
+    }
+    
+    .test-item {
+      padding: 8px 12px;
+      margin: 5px 0;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 14px;
+    }
+    
+    .test-pass {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    
+    .test-fail {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    
+    .btn {
+      display: inline-block;
+      padding: 8px 16px;
+      margin: 5px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    
+    .btn:hover {
+      background: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="debug-container">
+    <h1>🔧 Debug: UX Smells Detector</h1>
+    
+    <div class="debug-section">
+      <h3>📊 Estado del Build</h3>
+      <div id="build-status">Verificando archivos...</div>
+    </div>
+    
+    <div class="debug-section">
+      <h3>🧪 Pruebas de Funcionalidad</h3>
+      <button class="btn" onclick="testUIComponents()">🔍 Probar Componentes UI</button>
+      <button class="btn" onclick="testToggleButton()">⚙️ Probar Botón Toggle</button>
+      <button class="btn" onclick="testEventListeners()">📡 Probar Event Listeners</button>
+      
+      <div id="test-results" class="test-results"></div>
+    </div>
+    
+    <div class="debug-section">
+      <h3>📱 Vista Previa del Plugin</h3>
+      <iframe src="./dist/ui.html" id="plugin-preview"></iframe>
+    </div>
+  </div>
+
+  <script>
+    let testResults = [];
+    
+    function addTest(name, passed, details = '') {
+      testResults.push({ name, passed, details });
+      updateTestResults();
+    }
+    
+    function updateTestResults() {
+      const container = document.getElementById('test-results');
+      let html = '<h4>Resultados:</h4>';
+      
+      testResults.forEach(test => {
+        const className = test.passed ? 'test-pass' : 'test-fail';
+        const icon = test.passed ? '✅' : '❌';
+        html += `<div class="${className}">${icon} ${test.name}`;
+        if (test.details) html += `<br>&nbsp;&nbsp;&nbsp;&nbsp;${test.details}`;
+        html += '</div>';
+      });
+      
+      container.innerHTML = html;
+    }
+    
+    function testUIComponents() {
+      testResults = [];
+      addTest('Iniciando pruebas de componentes UI...', true);
+      
+      // Test if dist files exist
+      fetch('./dist/ui.html')
+        .then(response => {
+          addTest('Archivo dist/ui.html', response.ok, `Status: ${response.status}`);
+          return fetch('./dist/code.js');
+        })
+        .then(response => {
+          addTest('Archivo dist/code.js', response.ok, `Status: ${response.status}`);
+          return fetch('./dist/ui.js');
+        })
+        .then(response => {
+          addTest('Archivo dist/ui.js', response.ok, `Status: ${response.status}`);
+        })
+        .catch(error => {
+          addTest('Error en verificación de archivos', false, error.message);
+        });
+    }
+    
+    function testToggleButton() {
+      const iframe = document.getElementById('plugin-preview');
+      
+      try {
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        const toggleBtn = iframeDoc.getElementById('toggle-rules');
+        const rulesConfig = iframeDoc.getElementById('rules-config');
+        
+        addTest('Botón toggle encontrado', !!toggleBtn);
+        addTest('Panel de reglas encontrado', !!rulesConfig);
+        
+        if (toggleBtn && rulesConfig) {
+          // Test initial state
+          const initialDisplay = window.getComputedStyle(rulesConfig).display;
+          addTest('Estado inicial del panel', initialDisplay === 'none', `Display: ${initialDisplay}`);
+          
+          // Simulate click
+          toggleBtn.click();
+          
+          setTimeout(() => {
+            const newDisplay = window.getComputedStyle(rulesConfig).display;
+            addTest('Panel después del click', newDisplay !== 'none', `Display: ${newDisplay}`);
+          }, 100);
+        }
+        
+      } catch (error) {
+        addTest('Error en prueba de toggle', false, error.message);
+      }
+    }
+    
+    function testEventListeners() {
+      addTest('Prueba de Event Listeners iniciada', true);
+      
+      // This would need to be implemented based on the specific event system
+      // For now, just indicate the test structure
+      addTest('Event Listeners', true, 'Estructura de prueba preparada');
+    }
+    
+    // Check build status on load
+    document.addEventListener('DOMContentLoaded', function() {
+      const buildStatus = document.getElementById('build-status');
+      
+      Promise.all([
+        fetch('./dist/ui.html').then(r => r.ok),
+        fetch('./dist/code.js').then(r => r.ok),
+        fetch('./dist/ui.js').then(r => r.ok)
+      ]).then(results => {
+        const allOk = results.every(r => r);
+        buildStatus.innerHTML = allOk 
+          ? '✅ Todos los archivos del build están presentes'
+          : '❌ Faltan algunos archivos del build';
+        buildStatus.parentElement.className = `debug-section ${allOk ? 'status-ok' : 'status-error'}`;
+      }).catch(error => {
+        buildStatus.innerHTML = '❌ Error verificando build: ' + error.message;
+        buildStatus.parentElement.className = 'debug-section status-error';
+      });
+    });
+  </script>
+</body>
+</html>

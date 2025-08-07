@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug UI</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .btn { padding: 10px 20px; margin: 5px; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .btn:hover { background: #0052a3; }
+        #debug-log { background: #f5f5f5; padding: 10px; margin-top: 20px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>Debug UI Test</h1>
+    <button id="analyze-selection" class="btn">Analizar Selección</button>
+    <button id="analyze-page" class="btn">Analizar Página Completa</button>
+    <button id="toggle-rules" class="btn">⚙️ Configurar Reglas</button>
+    
+    <div id="debug-log"></div>
+    
+    <script>
+        console.log('Debug script loaded');
+        
+        let debugLog = '';
+        
+        function log(message) {
+            debugLog += new Date().toLocaleTimeString() + ': ' + message + '\n';
+            const logElement = document.getElementById('debug-log');
+            if (logElement) {
+                logElement.textContent = debugLog;
+            }
+            console.log(message);
+        }
+        
+        function initializeDebugUI() {
+            log('Initializing debug UI...');
+            
+            const analyzeSelectionBtn = document.getElementById('analyze-selection');
+            const analyzePageBtn = document.getElementById('analyze-page');
+            const toggleRulesBtn = document.getElementById('toggle-rules');
+            
+            log('Elements found: ' + JSON.stringify({
+                analyzeSelectionBtn: !!analyzeSelectionBtn,
+                analyzePageBtn: !!analyzePageBtn,
+                toggleRulesBtn: !!toggleRulesBtn
+            }));
+            
+            if (analyzeSelectionBtn) {
+                analyzeSelectionBtn.addEventListener('click', () => {
+                    log('Analyze selection clicked!');
+                });
+            }
+            
+            if (analyzePageBtn) {
+                analyzePageBtn.addEventListener('click', () => {
+                    log('Analyze page clicked!');
+                });
+            }
+            
+            if (toggleRulesBtn) {
+                toggleRulesBtn.addEventListener('click', () => {
+                    log('Toggle rules clicked!');
+                });
+            }
+            
+            log('Event listeners attached successfully');
+        }
+        
+        if (document.readyState === 'loading') {
+            log('DOM is loading, waiting for DOMContentLoaded...');
+            document.addEventListener('DOMContentLoaded', initializeDebugUI);
+        } else {
+            log('DOM already loaded, initializing immediately...');
+            initializeDebugUI();
+        }
+    </script>
+</body>
+</html>

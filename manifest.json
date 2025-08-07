@@ -1,0 +1,42 @@
+{
+  "name": "UX Smells Detector",
+  "id": "ux-smells-detector",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "capabilities": [],
+  "enableProposedApi": false,
+  "editorType": [
+    "figma",
+    "figjam"
+  ],
+  "networkAccess": {
+    "allowedDomains": [
+      "none"
+    ]
+  },
+  "permissions": [
+    "currentuser"
+  ],
+  "menu": [
+    {
+      "name": "Analyze Selection",
+      "command": "analyze-selection"
+    },
+    {
+      "name": "Analyze Page",
+      "command": "analyze-page"
+    },
+    {
+      "name": "Open UX Smells Panel",
+      "command": "open-panel"
+    },
+    {
+      "separator": true
+    },
+    {
+      "name": "Settings",
+      "command": "open-settings"
+    }
+  ]
+}

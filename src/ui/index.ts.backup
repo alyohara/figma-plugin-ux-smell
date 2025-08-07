@@ -1,0 +1,2242 @@
+// UI principal del plugin
+console.log('🚀 UI script loaded at:', new Date().toISOString());
+console.log('📊 Document ready state:', document.readyState);
+console.log('🌐 Window loaded:', document.readyState === 'complete');
+
+// Debug logging system
+interface DebugInfo {
+  timestamp: Date;
+  domReadyState: DocumentReadyState;
+  elementsFound: Record<string, boolean>;
+  listenersAttached: Record<string, boolean>;
+  errors: string[];
+  initializationAttempts: number;
+}
+
+// Initialize debugInfo early
+let debugInfo: DebugInfo = {
+  timestamp: new Date(),
+  domReadyState: document.readyState,
+  elementsFound: {},
+  listenersAttached: {},
+  errors: [],
+  initializationAttempts: 0
+};
+
+// Logging functions - defined early to avoid hoisting issues
+function logDebug(message: string, data?: any) {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] 🔍 ${message}`, data || '');
+}
+
+function logError(message: string, error?: any) {
+  const timestamp = new Date().toISOString();
+  console.error(`[${timestamp}] ❌ ${message}`, error || '');
+  debugInfo.errors.push(`${timestamp}: ${message}`);
+}
+
+function logElementState(elementId: string, element: HTMLElement | null) {
+  debugInfo.elementsFound[elementId] = !!element;
+  if (element) {
+    logDebug(`✅ Element found: ${elementId}`, {
+      tagName: element.tagName,
+      id: element.id,
+      className: element.className,
+      offsetParent: !!element.offsetParent
+    });
+  } else {
+    logError(`❌ Element NOT found: ${elementId}`);
+  }
+}
+
+function logEventAttachment(elementId: string, eventType: string, success: boolean) {
+  debugInfo.listenersAttached[`${elementId}-${eventType}`] = success;
+  if (success) {
+    logDebug(`✅ Event listener attached: ${elementId} -> ${eventType}`);
+  } else {
+    logError(`❌ Failed to attach event listener: ${elementId} -> ${eventType}`);
+  }
+}
+
+// DOM Ready Detection System
+interface DOMReadyDetector {
+  isReady(): boolean;
+  waitForReady(): Promise<void>;
+  onReady(callback: () => void): void;
+  getReadyState(): DocumentReadyState;
+}
+
+class DOMStateManager implements DOMReadyDetector {
+  private readyCallbacks: (() => void)[] = [];
+  private isReadyResolved: boolean = false;
+  private readyPromise: Promise<void> | null = null;
+
+  constructor() {
+    this.setupReadyDetection();
+  }
+
+  private setupReadyDetection(): void {
+    logDebug('🔧 Setting up DOM ready detection...');
+    
+    // Si ya está listo, marcar como resuelto
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      logDebug('✅ DOM already ready:', document.readyState);
+      this.markAsReady();
+      return;
+    }
+
+    // Escuchar eventos de DOM ready
+    const onDOMContentLoaded = () => {
+      logDebug('📄 DOMContentLoaded event received');
+      if (document.readyState === 'interactive' || document.readyState === 'complete') {
+        this.markAsReady();
+      }
+    };
+
+    const onLoad = () => {
+      logDebug('🎯 Window load event received');
+      this.markAsReady();
+    };
+
+    // Agregar listeners
+    document.addEventListener('DOMContentLoaded', onDOMContentLoaded, { once: true });
+    window.addEventListener('load', onLoad, { once: true });
+
+    // Fallback con polling
+    this.startReadyStatePolling();
+  }
+
+  private startReadyStatePolling(): void {
+    const pollInterval = 50; // Check every 50ms
+    const maxPollTime = 5000; // Stop after 5 seconds
+    let pollCount = 0;
+    const maxPolls = maxPollTime / pollInterval;
+
+    const poll = () => {
+      pollCount++;
+      
+      if (this.isReadyResolved) {
+        return; // Already resolved
+      }
+
+      if (document.readyState === 'interactive' || document.readyState === 'complete') {
+        logDebug('✅ DOM ready detected via polling');
+        this.markAsReady();
+        return;
+      }
+
+      if (pollCount >= maxPolls) {
+        logError('⚠️ DOM ready polling timeout, forcing ready state');
+        this.markAsReady();
+        return;
+      }
+
+      setTimeout(poll, pollInterval);
+    };
+
+    setTimeout(poll, pollInterval);
+  }
+
+  private markAsReady(): void {
+    if (this.isReadyResolved) {
+      return; // Already resolved
+    }
+
+    this.isReadyResolved = true;
+    logDebug('🎉 DOM marked as ready, executing callbacks...');
+    
+    // Execute all pending callbacks
+    this.readyCallbacks.forEach(callback => {
+      try {
+        callback();
+      } catch (error) {
+        logError('❌ Error executing DOM ready callback:', error);
+      }
+    });
+
+    // Clear callbacks
+    this.readyCallbacks = [];
+  }
+
+  public isReady(): boolean {
+    return this.isReadyResolved || 
+           document.readyState === 'complete' || 
+           document.readyState === 'interactive';
+  }
+
+  public waitForReady(): Promise<void> {
+    if (this.readyPromise) {
+      return this.readyPromise;
+    }
+
+    this.readyPromise = new Promise<void>((resolve) => {
+      if (this.isReady()) {
+        logDebug('✅ DOM already ready, resolving immediately');
+        resolve();
+        return;
+      }
+
+      logDebug('⏳ Waiting for DOM ready...');
+      this.onReady(() => {
+        logDebug('✅ DOM ready promise resolved');
+        resolve();
+      });
+    });
+
+    return this.readyPromise;
+  }
+
+  public onReady(callback: () => void): void {
+    if (this.isReady()) {
+      logDebug('✅ DOM already ready, executing callback immediately');
+      try {
+        callback();
+      } catch (error) {
+        logError('❌ Error executing immediate DOM ready callback:', error);
+      }
+      return;
+    }
+
+    logDebug('📝 Adding callback to DOM ready queue');
+    this.readyCallbacks.push(callback);
+  }
+
+  public getReadyState(): DocumentReadyState {
+    return document.readyState;
+  }
+}
+
+// Create DOM state manager instance
+const domStateManager = new DOMStateManager();
+
+// Event Listener Management System
+interface ElementConfig {
+  id: string;
+  required: boolean;
+  eventType: string;
+  handler: EventListener;
+  fallbackHandler?: EventListener;
+}
+
+interface EventListenerManager {
+  initialize(): Promise<boolean>;
+  attachListeners(): boolean;
+  verifyListeners(): boolean;
+  cleanup(): void;
+  getElementsStatus(): Record<string, boolean>;
+  getListenersStatus(): Record<string, boolean>;
+}
+
+class UIEventManager implements EventListenerManager {
+  private elements: Map<string, HTMLElement> = new Map();
+  private listeners: Map<string, EventListener> = new Map();
+  private elementConfigs: ElementConfig[] = [];
+  private initialized: boolean = false;
+  private maxRetries: number = 5;
+  private retryDelay: number = 100;
+
+  constructor() {
+    this.setupElementConfigurations();
+  }
+
+  private setupElementConfigurations(): void {
+    logDebug('🔧 Setting up element configurations...');
+    
+    this.elementConfigs = [
+      {
+        id: 'analyze-selection',
+        required: true,
+        eventType: 'click',
+        handler: async (event: Event) => {
+          logDebug('🔍 Analyze selection clicked via EventManager!');
+          const button = event.target as HTMLButtonElement;
+          
+          // Immediate visual feedback
+          this.showButtonFeedback(button, 'Analizando selección...');
+          
+          const enabledRules = Array.from(selectedRules);
+          logDebug('📋 Enabled rules:', enabledRules);
+          
+          try {
+            await this.sendMessageToPlugin('analyze-selection', { enabledRules });
+          } catch (error) {
+            logError('❌ Failed to send analyze-selection message:', error);
+            this.showButtonFeedback(button, 'Error al enviar mensaje', 2000);
+          }
+        }
+      },
+      {
+        id: 'analyze-page',
+        required: true,
+        eventType: 'click',
+        handler: async (event: Event) => {
+          logDebug('📄 Analyze page clicked via EventManager!');
+          const button = event.target as HTMLButtonElement;
+          
+          // Immediate visual feedback
+          this.showButtonFeedback(button, 'Analizando página...');
+          
+          const enabledRules = Array.from(selectedRules);
+          logDebug('📋 Enabled rules:', enabledRules);
+          
+          try {
+            await this.sendMessageToPlugin('analyze-page', { enabledRules });
+          } catch (error) {
+            logError('❌ Failed to send analyze-page message:', error);
+            this.showButtonFeedback(button, 'Error al enviar mensaje', 2000);
+          }
+        }
+      },
+      {
+        id: 'toggle-rules',
+        required: true,
+        eventType: 'click',
+        handler: (event: Event) => {
+          logDebug('⚙️ Toggle rules clicked via EventManager!');
+          const button = event.target as HTMLButtonElement;
+          const rulesSection = this.elements.get('rules-config') as HTMLDivElement;
+          
+          if (rulesSection && button) {
+            const isVisible = rulesSection.style.display !== 'none';
+            rulesSection.style.display = isVisible ? 'none' : 'block';
+            button.textContent = isVisible ? '⚙️ Configurar Reglas' : '❌ Cerrar Configuración';
+            
+            // Visual feedback
+            this.showButtonFeedback(button, isVisible ? 'Configuración cerrada' : 'Configuración abierta', 1000);
+            
+            logDebug('📋 Rules section toggled:', isVisible ? 'hidden' : 'shown');
+          } else {
+            logError('❌ Rules section or toggle button not found');
+          }
+        }
+      },
+      {
+        id: 'select-all-rules',
+        required: false,
+        eventType: 'click',
+        handler: (event: Event) => {
+          logDebug('📋 Select all rules clicked via EventManager');
+          const button = event.target as HTMLButtonElement;
+          
+          availableRules.forEach(rule => selectedRules.add(rule.id));
+          updateRulesUI();
+          
+          this.showButtonFeedback(button, `${availableRules.length} reglas seleccionadas`, 1500);
+        }
+      },
+      {
+        id: 'deselect-all-rules',
+        required: false,
+        eventType: 'click',
+        handler: (event: Event) => {
+          logDebug('📋 Deselect all rules clicked via EventManager');
+          const button = event.target as HTMLButtonElement;
+          
+          const previousCount = selectedRules.size;
+          selectedRules.clear();
+          updateRulesUI();
+          
+          this.showButtonFeedback(button, `${previousCount} reglas deseleccionadas`, 1500);
+        }
+      },
+      {
+        id: 'reset-rules',
+        required: false,
+        eventType: 'click',
+        handler: (event: Event) => {
+          logDebug('📋 Reset rules clicked via EventManager');
+          const button = event.target as HTMLButtonElement;
+          
+          selectedRules.clear();
+          availableRules.forEach(rule => selectedRules.add(rule.id));
+          updateRulesUI();
+          
+          this.showButtonFeedback(button, 'Reglas restauradas', 1500);
+        }
+      },
+      {
+        id: 'export-json',
+        required: false,
+        eventType: 'click',
+        handler: (event: Event) => {
+          logDebug('📤 Export JSON clicked via EventManager');
+          const button = event.target as HTMLButtonElement;
+          
+          if (lastAnalysisResults) {
+            this.showButtonFeedback(button, 'Exportando JSON...', 1000);
+            exportToJson(lastAnalysisResults);
+          } else {
+            this.showButtonFeedback(button, 'No hay resultados para exportar', 2000);
+          }
+        }
+      },
+      {
+        id: 'export-csv',
+        required: false,
+        eventType: 'click',
+        handler: (event: Event) => {
+          logDebug('📤 Export CSV clicked via EventManager');
+          const button = event.target as HTMLButtonElement;
+          
+          if (lastAnalysisResults) {
+            this.showButtonFeedback(button, 'Exportando CSV...', 1000);
+            exportToCsv(lastAnalysisResults);
+          } else {
+            this.showButtonFeedback(button, 'No hay resultados para exportar', 2000);
+          }
+        }
+      },
+      {
+        id: 'export-html',
+        required: false,
+        eventType: 'click',
+        handler: (event: Event) => {
+          logDebug('📤 Export HTML clicked via EventManager');
+          const button = event.target as HTMLButtonElement;
+          
+          if (lastAnalysisResults) {
+            this.showButtonFeedback(button, 'Exportando HTML...', 1000);
+            exportToHtml(lastAnalysisResults);
+          } else {
+            this.showButtonFeedback(button, 'No hay resultados para exportar', 2000);
+          }
+        }
+      }
+    ];
+
+    // Also store non-interactive elements we need to track
+    const additionalElements = ['rules-config', 'results', 'export-section'];
+    additionalElements.forEach(id => {
+      this.elementConfigs.push({
+        id,
+        required: false,
+        eventType: '',
+        handler: () => {} // No handler needed for non-interactive elements
+      });
+    });
+  }
+
+  private async sendMessageToPlugin(type: string, data?: any): Promise<void> {
+    try {
+      logDebug(`📡 Sending message to plugin via MessageHandler: ${type}`, data);
+      const success = await messageHandler.sendToPlugin(type, data);
+      
+      if (success) {
+        logDebug('✅ Message sent and acknowledged successfully');
+      } else {
+        logError('⚠️ Message sent but not acknowledged (timeout)');
+      }
+    } catch (error) {
+      logError('❌ Failed to send message to plugin:', error);
+    }
+  }
+
+  private showButtonFeedback(button: HTMLButtonElement, message: string, duration: number = 2000): void {
+    if (!button) return;
+
+    // Store original state
+    const originalText = button.textContent;
+    const originalDisabled = button.disabled;
+    const originalStyle = button.style.cssText;
+
+    // Apply feedback state
+    button.textContent = message;
+    button.disabled = true;
+    button.style.cssText = originalStyle + '; opacity: 0.7; cursor: not-allowed;';
+
+    // Add visual pulse effect
+    button.style.animation = 'pulse 0.5s ease-in-out';
+
+    // Restore original state after duration
+    setTimeout(() => {
+      if (button) {
+        button.textContent = originalText;
+        button.disabled = originalDisabled;
+        button.style.cssText = originalStyle;
+        button.style.animation = '';
+      }
+    }, duration);
+
+    logDebug(`💫 Button feedback shown: ${message}`);
+  }
+
+  public async initialize(): Promise<boolean> {
+    logDebug('🚀 Initializing UIEventManager...');
+    
+    try {
+      // Wait for DOM to be ready
+      await domStateManager.waitForReady();
+      
+      // Use retry mechanism for finding elements and attaching listeners
+      const success = await this.initializeWithRetry();
+      
+      if (success) {
+        this.initialized = true;
+        logDebug('✅ UIEventManager initialized successfully');
+      } else {
+        logError('❌ UIEventManager initialization failed after all retries');
+      }
+      
+      return success;
+
+    } catch (error) {
+      logError('❌ Error during UIEventManager initialization:', error);
+      return false;
+    }
+  }
+
+  private async initializeWithRetry(): Promise<boolean> {
+    const maxRetries = this.maxRetries;
+    let attempt = 0;
+
+    while (attempt < maxRetries) {
+      attempt++;
+      logDebug(`🔄 EventManager initialization attempt ${attempt}/${maxRetries}`);
+
+      try {
+        // Find all elements
+        const elementsFound = await this.findElementsWithRetry(attempt);
+        if (!elementsFound) {
+          if (attempt === maxRetries) {
+            logError('❌ Failed to find required elements after all retries');
+            return false;
+          }
+          continue; // Try again
+        }
+
+        // Attach event listeners
+        const listenersAttached = await this.attachListenersWithRetry(attempt);
+        if (!listenersAttached) {
+          if (attempt === maxRetries) {
+            logError('❌ Failed to attach event listeners after all retries');
+            return false;
+          }
+          continue; // Try again
+        }
+
+        // Verify listeners
+        const listenersVerified = this.verifyListeners();
+        if (!listenersVerified) {
+          logError('⚠️ Some listeners could not be verified, but continuing...');
+        }
+
+        logDebug(`✅ EventManager initialization successful on attempt ${attempt}`);
+        return true;
+
+      } catch (error) {
+        logError(`❌ Error on initialization attempt ${attempt}:`, error);
+        
+        if (attempt === maxRetries) {
+          logError('❌ All initialization attempts failed');
+          return false;
+        }
+
+        // Wait before retrying with exponential backoff
+        const delay = Math.min(this.retryDelay * Math.pow(2, attempt - 1), 2000);
+        logDebug(`⏰ Waiting ${delay}ms before retry...`);
+        await this.sleep(delay);
+      }
+    }
+
+    return false;
+  }
+
+  private async findElementsWithRetry(attempt: number): Promise<boolean> {
+    logDebug(`🔍 Finding DOM elements (attempt ${attempt})...`);
+    
+    // Clear previous elements
+    this.elements.clear();
+    
+    let foundCount = 0;
+    let requiredCount = 0;
+    const missingRequired: string[] = [];
+
+    this.elementConfigs.forEach(config => {
+      const element = document.getElementById(config.id);
+      
+      if (element) {
+        this.elements.set(config.id, element);
+        logElementState(config.id, element);
+        foundCount++;
+      } else {
+        logElementState(config.id, null);
+        if (config.required) {
+          missingRequired.push(config.id);
+        }
+      }
+
+      if (config.required) {
+        requiredCount++;
+      }
+    });
+
+    const requiredFound = missingRequired.length === 0;
+    
+    logDebug(`📊 Elements found: ${foundCount}/${this.elementConfigs.length} (required missing: ${missingRequired.length})`);
+    
+    if (!requiredFound) {
+      logDebug(`⏳ Missing required elements: ${missingRequired.join(', ')}`);
+      logDebug('📋 Available elements in DOM:', Array.from(document.querySelectorAll('[id]')).map(el => el.id));
+    }
+    
+    return requiredFound;
+  }
+
+  private async attachListenersWithRetry(attempt: number): Promise<boolean> {
+    logDebug(`🔗 Attaching event listeners (attempt ${attempt})...`);
+    
+    // Clear previous listeners
+    this.listeners.clear();
+    
+    let successCount = 0;
+    let attemptCount = 0;
+    const failedListeners: string[] = [];
+
+    this.elementConfigs.forEach(config => {
+      if (!config.eventType || config.eventType === '') {
+        return; // Skip non-interactive elements
+      }
+
+      attemptCount++;
+      const element = this.elements.get(config.id);
+      
+      if (!element) {
+        logError(`❌ Cannot attach listener to ${config.id}: element not found`);
+        logEventAttachment(config.id, config.eventType, false);
+        if (config.required) {
+          failedListeners.push(config.id);
+        }
+        return;
+      }
+
+      try {
+        // Remove any existing listener first
+        const existingListener = this.listeners.get(`${config.id}-${config.eventType}`);
+        if (existingListener) {
+          element.removeEventListener(config.eventType, existingListener);
+        }
+
+        // Add new listener
+        element.addEventListener(config.eventType, config.handler);
+        this.listeners.set(`${config.id}-${config.eventType}`, config.handler);
+        logEventAttachment(config.id, config.eventType, true);
+        successCount++;
+      } catch (error) {
+        logError(`❌ Failed to attach listener to ${config.id}:`, error);
+        logEventAttachment(config.id, config.eventType, false);
+        if (config.required) {
+          failedListeners.push(config.id);
+        }
+      }
+    });
+
+    const requiredSuccess = failedListeners.length === 0;
+    
+    logDebug(`📊 Event listeners attached: ${successCount}/${attemptCount} (required failures: ${failedListeners.length})`);
+    
+    if (!requiredSuccess) {
+      logDebug(`⏳ Failed required listeners: ${failedListeners.join(', ')}`);
+    }
+    
+    return requiredSuccess;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private findElements(): boolean {
+    logDebug('🔍 Finding DOM elements...');
+    let foundCount = 0;
+    let requiredCount = 0;
+
+    this.elementConfigs.forEach(config => {
+      const element = document.getElementById(config.id);
+      
+      if (element) {
+        this.elements.set(config.id, element);
+        logElementState(config.id, element);
+        foundCount++;
+      } else {
+        logElementState(config.id, null);
+      }
+
+      if (config.required) {
+        requiredCount++;
+        if (!element) {
+          logError(`❌ Required element not found: ${config.id}`);
+        }
+      }
+    });
+
+    const requiredFound = this.elementConfigs
+      .filter(config => config.required)
+      .every(config => this.elements.has(config.id));
+
+    logDebug(`📊 Elements found: ${foundCount}/${this.elementConfigs.length} (required: ${requiredFound})`);
+    
+    return requiredFound;
+  }
+
+  public attachListeners(): boolean {
+    logDebug('🔗 Attaching event listeners...');
+    let successCount = 0;
+    let attemptCount = 0;
+
+    this.elementConfigs.forEach(config => {
+      if (!config.eventType || config.eventType === '') {
+        return; // Skip non-interactive elements
+      }
+
+      attemptCount++;
+      const element = this.elements.get(config.id);
+      
+      if (!element) {
+        logError(`❌ Cannot attach listener to ${config.id}: element not found`);
+        logEventAttachment(config.id, config.eventType, false);
+        return;
+      }
+
+      try {
+        element.addEventListener(config.eventType, config.handler);
+        this.listeners.set(`${config.id}-${config.eventType}`, config.handler);
+        logEventAttachment(config.id, config.eventType, true);
+        successCount++;
+      } catch (error) {
+        logError(`❌ Failed to attach listener to ${config.id}:`, error);
+        logEventAttachment(config.id, config.eventType, false);
+      }
+    });
+
+    const requiredListeners = this.elementConfigs
+      .filter(config => config.required && config.eventType)
+      .length;
+
+    const requiredSuccess = this.elementConfigs
+      .filter(config => config.required && config.eventType)
+      .every(config => this.listeners.has(`${config.id}-${config.eventType}`));
+
+    logDebug(`📊 Event listeners attached: ${successCount}/${attemptCount} (required success: ${requiredSuccess})`);
+    
+    return requiredSuccess;
+  }
+
+  public verifyListeners(): boolean {
+    logDebug('✅ Verifying event listeners...');
+    let verifiedCount = 0;
+    let totalCount = 0;
+
+    this.listeners.forEach((listener, key) => {
+      totalCount++;
+      const [elementId, eventType] = key.split('-');
+      const element = this.elements.get(elementId);
+      
+      if (element) {
+        // We can't directly verify if the listener is attached,
+        // but we can verify the element exists and is in the DOM
+        const isInDOM = document.contains(element);
+        if (isInDOM) {
+          verifiedCount++;
+          logDebug(`✅ Listener verified: ${key}`);
+        } else {
+          logError(`❌ Element not in DOM: ${elementId}`);
+        }
+      } else {
+        logError(`❌ Element not found for verification: ${elementId}`);
+      }
+    });
+
+    logDebug(`📊 Listeners verified: ${verifiedCount}/${totalCount}`);
+    return verifiedCount === totalCount;
+  }
+
+  public cleanup(): void {
+    logDebug('🧹 Cleaning up UIEventManager...');
+    
+    this.listeners.forEach((listener, key) => {
+      const [elementId, eventType] = key.split('-');
+      const element = this.elements.get(elementId);
+      
+      if (element) {
+        try {
+          element.removeEventListener(eventType, listener);
+          logDebug(`✅ Removed listener: ${key}`);
+        } catch (error) {
+          logError(`❌ Failed to remove listener ${key}:`, error);
+        }
+      }
+    });
+
+    this.listeners.clear();
+    this.elements.clear();
+    this.initialized = false;
+    
+    logDebug('✅ UIEventManager cleanup completed');
+  }
+
+  public getElementsStatus(): Record<string, boolean> {
+    const status: Record<string, boolean> = {};
+    this.elementConfigs.forEach(config => {
+      status[config.id] = this.elements.has(config.id);
+    });
+    return status;
+  }
+
+  public getListenersStatus(): Record<string, boolean> {
+    const status: Record<string, boolean> = {};
+    this.elementConfigs.forEach(config => {
+      if (config.eventType) {
+        const key = `${config.id}-${config.eventType}`;
+        status[key] = this.listeners.has(key);
+      }
+    });
+    return status;
+  }
+
+  public isInitialized(): boolean {
+    return this.initialized;
+  }
+}
+
+// Plugin Message Communication System
+interface MessageHandler {
+  sendToPlugin(type: string, data?: any): Promise<boolean>;
+  onMessageFromPlugin(callback: (message: any) => void): void;
+  isConnected(): boolean;
+  getQueuedMessages(): any[];
+}
+
+class PluginMessageHandler implements MessageHandler {
+  private messageQueue: any[] = [];
+  private connected: boolean = false;
+  private messageCallbacks: ((message: any) => void)[] = [];
+  private messageId: number = 0;
+  private pendingMessages: Map<string, { resolve: Function; reject: Function; timeout: any }> = new Map();
+
+  constructor() {
+    this.setupMessageListener();
+    this.checkConnection();
+  }
+
+  private setupMessageListener(): void {
+    window.onmessage = (event) => {
+      try {
+        const { type, data } = event.data.pluginMessage || {};
+        
+        if (!type) {
+          logDebug('📨 Received message without type:', event.data);
+          return;
+        }
+
+        logDebug(`📨 Received message from plugin: ${type}`, data);
+        
+        // Mark as connected when we receive any message
+        if (!this.connected) {
+          this.connected = true;
+          logDebug('✅ Plugin connection established');
+          this.processQueuedMessages();
+        }
+
+        // Handle message acknowledgments
+        if (type === 'message-ack' && data?.messageId) {
+          this.handleMessageAck(data.messageId, true);
+          return;
+        }
+
+        if (type === 'message-error' && data?.messageId) {
+          this.handleMessageAck(data.messageId, false, data.error);
+          return;
+        }
+
+        // Execute callbacks
+        this.messageCallbacks.forEach(callback => {
+          try {
+            callback({ type, data });
+          } catch (error) {
+            logError('❌ Error in message callback:', error);
+          }
+        });
+
+      } catch (error) {
+        logError('❌ Error processing message from plugin:', error);
+      }
+    };
+  }
+
+  private checkConnection(): void {
+    // Send a ping message to check if plugin is responsive
+    logDebug('🏓 Checking plugin connection...');
+    
+    this.sendToPlugin('ping', { timestamp: Date.now() })
+      .then(() => {
+        logDebug('✅ Plugin connection verified');
+      })
+      .catch(() => {
+        logDebug('⚠️ Plugin connection check failed, will retry on first real message');
+      });
+  }
+
+  private handleMessageAck(messageId: string, success: boolean, error?: any): void {
+    const pending = this.pendingMessages.get(messageId);
+    if (pending) {
+      clearTimeout(pending.timeout);
+      this.pendingMessages.delete(messageId);
+      
+      if (success) {
+        pending.resolve(true);
+      } else {
+        pending.reject(new Error(error || 'Message failed'));
+      }
+    }
+  }
+
+  public async sendToPlugin(type: string, data?: any): Promise<boolean> {
+    const messageId = `msg_${++this.messageId}_${Date.now()}`;
+    const message = {
+      pluginMessage: {
+        type,
+        messageId,
+        timestamp: Date.now(),
+        ...data
+      }
+    };
+
+    logDebug(`📡 Sending message to plugin: ${type} (ID: ${messageId})`, data);
+
+    return new Promise((resolve, reject) => {
+      try {
+        // If not connected, queue the message
+        if (!this.connected && type !== 'ping') {
+          logDebug(`📦 Queueing message (not connected): ${type}`);
+          this.messageQueue.push({ message, resolve, reject });
+          return;
+        }
+
+        // Send message
+        parent.postMessage(message, '*');
+        
+        // For ping messages, resolve immediately
+        if (type === 'ping') {
+          resolve(true);
+          return;
+        }
+
+        // Set up timeout for acknowledgment
+        const timeout = setTimeout(() => {
+          this.pendingMessages.delete(messageId);
+          logError(`⏰ Message timeout: ${type} (ID: ${messageId})`);
+          resolve(false); // Don't reject, just return false
+        }, 5000); // 5 second timeout
+
+        // Store pending message
+        this.pendingMessages.set(messageId, { resolve, reject, timeout });
+
+        logDebug(`✅ Message sent: ${type} (ID: ${messageId})`);
+
+      } catch (error) {
+        logError(`❌ Failed to send message: ${type}`, error);
+        reject(error);
+      }
+    });
+  }
+
+  private processQueuedMessages(): void {
+    if (this.messageQueue.length === 0) {
+      return;
+    }
+
+    logDebug(`📦 Processing ${this.messageQueue.length} queued messages...`);
+    
+    const queue = [...this.messageQueue];
+    this.messageQueue = [];
+
+    queue.forEach(({ message, resolve, reject }) => {
+      try {
+        parent.postMessage(message, '*');
+        
+        // Set up timeout for queued messages
+        const messageId = message.pluginMessage.messageId;
+        const timeout = setTimeout(() => {
+          this.pendingMessages.delete(messageId);
+          resolve(false);
+        }, 5000);
+
+        this.pendingMessages.set(messageId, { resolve, reject, timeout });
+        
+      } catch (error) {
+        logError('❌ Failed to send queued message:', error);
+        reject(error);
+      }
+    });
+  }
+
+  public onMessageFromPlugin(callback: (message: any) => void): void {
+    this.messageCallbacks.push(callback);
+    logDebug('📝 Message callback registered');
+  }
+
+  public isConnected(): boolean {
+    return this.connected;
+  }
+
+  public getQueuedMessages(): any[] {
+    return [...this.messageQueue];
+  }
+
+  public getConnectionStatus(): { connected: boolean; queuedMessages: number; pendingMessages: number } {
+    return {
+      connected: this.connected,
+      queuedMessages: this.messageQueue.length,
+      pendingMessages: this.pendingMessages.size
+    };
+  }
+}
+
+// Create message handler and event manager instances
+const messageHandler = new PluginMessageHandler();
+const eventManager = new UIEventManager();
+
+// Setup message handling for plugin responses
+messageHandler.onMessageFromPlugin((message) => {
+  const { type, data } = message;
+  
+  switch (type) {
+    case 'analysis-result':
+      logDebug('📊 Received analysis result from plugin');
+      displayResults(data);
+      break;
+      
+    case 'available-rules':
+      logDebug('📋 Received available rules from plugin');
+      initializeRules(data);
+      break;
+      
+    case 'ping':
+      logDebug('🏓 Received ping from plugin');
+      // Respond to ping
+      messageHandler.sendToPlugin('pong', { timestamp: Date.now() });
+      break;
+      
+    default:
+      logDebug(`📨 Received unknown message type: ${type}`, data);
+  }
+});
+
+// Variables globales para almacenar los últimos resultados y paginación
+let lastAnalysisResults: any = null;
+let currentPage = 1;
+const issuesPerPage = 10;
+let showAllIssues = false;
+let availableRules: any[] = [];
+let selectedRules: Set<string> = new Set();
+
+// Variables para elementos DOM
+let analyzeSelectionBtn: HTMLButtonElement | null = null;
+let analyzePageBtn: HTMLButtonElement | null = null;
+let toggleRulesBtn: HTMLButtonElement | null = null;
+let rulesConfigSection: HTMLDivElement | null = null;
+let selectAllRulesBtn: HTMLButtonElement | null = null;
+let deselectAllRulesBtn: HTMLButtonElement | null = null;
+let resetRulesBtn: HTMLButtonElement | null = null;
+let resultsContainer: HTMLDivElement | null = null;
+let exportSection: HTMLDivElement | null = null;
+let exportJsonBtn: HTMLButtonElement | null = null;
+let exportCsvBtn: HTMLButtonElement | null = null;
+let exportHtmlBtn: HTMLButtonElement | null = null;
+
+// Función para inicializar la UI cuando el DOM esté listo
+async function initializeUI(): Promise<boolean> {
+  debugInfo.initializationAttempts++;
+  logDebug(`🚀 Starting UI initialization (attempt ${debugInfo.initializationAttempts})`);
+  logDebug('📊 Current DOM state:', {
+    readyState: document.readyState,
+    body: !!document.body,
+    documentElement: !!document.documentElement
+  });
+  
+  try {
+    // Use the centralized event manager
+    logDebug('🔧 Initializing EventManager...');
+    const eventManagerSuccess = await eventManager.initialize();
+    
+    if (!eventManagerSuccess) {
+      logError('❌ EventManager initialization failed');
+      return false;
+    }
+
+    // Update global element references for backward compatibility
+    logDebug('🔄 Updating global element references...');
+    updateGlobalElementReferences();
+
+    // Log status
+    logDebug('📊 Elements status:', eventManager.getElementsStatus());
+    logDebug('📊 Listeners status:', eventManager.getListenersStatus());
+
+    logDebug('✅ Event listeners setup completed via EventManager');
+    
+    // Solicitar reglas disponibles usando messageHandler
+    logDebug('📡 Requesting available rules from plugin...');
+    try {
+      await messageHandler.sendToPlugin('get-available-rules');
+      logDebug('✅ Rules request sent successfully');
+    } catch (error) {
+      logError('❌ Failed to request available rules:', error);
+    }
+    
+    return true;
+
+  } catch (error) {
+    logError('❌ Error during UI initialization:', error);
+    return false;
+  }
+}
+
+// Update global element references for backward compatibility
+function updateGlobalElementReferences(): void {
+  analyzeSelectionBtn = document.getElementById('analyze-selection') as HTMLButtonElement;
+  analyzePageBtn = document.getElementById('analyze-page') as HTMLButtonElement;
+  toggleRulesBtn = document.getElementById('toggle-rules') as HTMLButtonElement;
+  rulesConfigSection = document.getElementById('rules-config') as HTMLDivElement;
+  selectAllRulesBtn = document.getElementById('select-all-rules') as HTMLButtonElement;
+  deselectAllRulesBtn = document.getElementById('deselect-all-rules') as HTMLButtonElement;
+  resetRulesBtn = document.getElementById('reset-rules') as HTMLButtonElement;
+  resultsContainer = document.getElementById('results') as HTMLDivElement;
+  exportSection = document.getElementById('export-section') as HTMLDivElement;
+  exportJsonBtn = document.getElementById('export-json') as HTMLButtonElement;
+  exportCsvBtn = document.getElementById('export-csv') as HTMLButtonElement;
+  exportHtmlBtn = document.getElementById('export-html') as HTMLButtonElement;
+}
+
+// Configurar todos los event listeners
+function setupEventListeners(): boolean {
+  logDebug('🔧 Setting up event listeners...');
+  let successCount = 0;
+  let totalAttempts = 0;
+  
+  // Setup analyze selection button
+  totalAttempts++;
+  if (analyzeSelectionBtn) {
+    try {
+      logDebug('🔗 Adding click listener to analyze selection button');
+      analyzeSelectionBtn.addEventListener('click', () => {
+        logDebug('🔍 Analyze selection clicked!');
+        const enabledRules = Array.from(selectedRules);
+        logDebug('📋 Enabled rules:', enabledRules);
+        logDebug('📡 Sending analyze-selection message to plugin...');
+        
+        try {
+          parent.postMessage({ 
+            pluginMessage: { 
+              type: 'analyze-selection',
+              enabledRules: enabledRules
+            } 
+          }, '*');
+          logDebug('✅ Message sent successfully!');
+        } catch (error) {
+          logError('❌ Failed to send message to plugin:', error);
+        }
+      });
+      logEventAttachment('analyze-selection', 'click', true);
+      successCount++;
+    } catch (error) {
+      logError('❌ Failed to add click listener to analyze selection button:', error);
+      logEventAttachment('analyze-selection', 'click', false);
+    }
+  } else {
+    logError('❌ analyzeSelectionBtn not found!');
+    logEventAttachment('analyze-selection', 'click', false);
+  }
+
+  // Setup analyze page button
+  totalAttempts++;
+  if (analyzePageBtn) {
+    try {
+      logDebug('🔗 Adding click listener to analyze page button');
+      analyzePageBtn.addEventListener('click', () => {
+        logDebug('📄 Analyze page clicked!');
+        const enabledRules = Array.from(selectedRules);
+        logDebug('📋 Enabled rules:', enabledRules);
+        logDebug('📡 Sending analyze-page message to plugin...');
+        
+        try {
+          parent.postMessage({ 
+            pluginMessage: { 
+              type: 'analyze-page',
+              enabledRules: enabledRules
+            } 
+          }, '*');
+          logDebug('✅ Message sent successfully!');
+        } catch (error) {
+          logError('❌ Failed to send message to plugin:', error);
+        }
+      });
+      logEventAttachment('analyze-page', 'click', true);
+      successCount++;
+    } catch (error) {
+      logError('❌ Failed to add click listener to analyze page button:', error);
+      logEventAttachment('analyze-page', 'click', false);
+    }
+  } else {
+    logError('❌ analyzePageBtn not found!');
+    logEventAttachment('analyze-page', 'click', false);
+  }
+
+  // Setup toggle rules button
+  totalAttempts++;
+  if (toggleRulesBtn) {
+    try {
+      logDebug('🔗 Adding click listener to toggle rules button');
+      toggleRulesBtn.addEventListener('click', () => {
+        logDebug('⚙️ Toggle rules clicked!');
+        if (rulesConfigSection && toggleRulesBtn) {
+          const isVisible = rulesConfigSection.style.display !== 'none';
+          rulesConfigSection.style.display = isVisible ? 'none' : 'block';
+          toggleRulesBtn.textContent = isVisible ? '⚙️ Configurar Reglas' : '❌ Cerrar Configuración';
+          logDebug('📋 Rules section toggled:', isVisible ? 'hidden' : 'shown');
+        } else {
+          logError('❌ rulesConfigSection or toggleRulesBtn is null');
+        }
+      });
+      logEventAttachment('toggle-rules', 'click', true);
+      successCount++;
+    } catch (error) {
+      logError('❌ Failed to add click listener to toggle rules button:', error);
+      logEventAttachment('toggle-rules', 'click', false);
+    }
+  } else {
+    logError('❌ toggleRulesBtn not found!');
+    logEventAttachment('toggle-rules', 'click', false);
+  }
+
+  // Setup additional buttons with improved logging
+  if (selectAllRulesBtn) {
+    try {
+      selectAllRulesBtn.addEventListener('click', () => {
+        logDebug('📋 Select all rules clicked');
+        availableRules.forEach(rule => selectedRules.add(rule.id));
+        updateRulesUI();
+      });
+      logEventAttachment('select-all-rules', 'click', true);
+      successCount++;
+    } catch (error) {
+      logError('❌ Failed to add listener to select all rules button:', error);
+    }
+  }
+
+  if (deselectAllRulesBtn) {
+    try {
+      deselectAllRulesBtn.addEventListener('click', () => {
+        logDebug('📋 Deselect all rules clicked');
+        selectedRules.clear();
+        updateRulesUI();
+      });
+      logEventAttachment('deselect-all-rules', 'click', true);
+      successCount++;
+    } catch (error) {
+      logError('❌ Failed to add listener to deselect all rules button:', error);
+    }
+  }
+
+  if (resetRulesBtn) {
+    try {
+      resetRulesBtn.addEventListener('click', () => {
+        logDebug('📋 Reset rules clicked');
+        selectedRules.clear();
+        availableRules.forEach(rule => selectedRules.add(rule.id));
+        updateRulesUI();
+      });
+      logEventAttachment('reset-rules', 'click', true);
+      successCount++;
+    } catch (error) {
+      logError('❌ Failed to add listener to reset rules button:', error);
+    }
+  }
+
+  // Event listeners para exportación
+  if (exportJsonBtn) {
+    try {
+      exportJsonBtn.addEventListener('click', () => {
+        logDebug('📤 Export JSON clicked');
+        if (lastAnalysisResults) {
+          exportToJson(lastAnalysisResults);
+        }
+      });
+      logEventAttachment('export-json', 'click', true);
+      successCount++;
+    } catch (error) {
+      logError('❌ Failed to add listener to export JSON button:', error);
+    }
+  }
+
+  if (exportCsvBtn) {
+    try {
+      exportCsvBtn.addEventListener('click', () => {
+        logDebug('📤 Export CSV clicked');
+        if (lastAnalysisResults) {
+          exportToCsv(lastAnalysisResults);
+        }
+      });
+      logEventAttachment('export-csv', 'click', true);
+      successCount++;
+    } catch (error) {
+      logError('❌ Failed to add listener to export CSV button:', error);
+    }
+  }
+
+  if (exportHtmlBtn) {
+    try {
+      exportHtmlBtn.addEventListener('click', () => {
+        logDebug('📤 Export HTML clicked');
+        if (lastAnalysisResults) {
+          exportToHtml(lastAnalysisResults);
+        }
+      });
+      logEventAttachment('export-html', 'click', true);
+      successCount++;
+    } catch (error) {
+      logError('❌ Failed to add listener to export HTML button:', error);
+    }
+  }
+
+  logDebug(`📊 Event listeners setup summary: ${successCount}/${totalAttempts} successful`);
+  
+  // Return true if at least the critical buttons have listeners
+  const criticalSuccess = debugInfo.listenersAttached['analyze-selection-click'] && 
+                         debugInfo.listenersAttached['analyze-page-click'] && 
+                         debugInfo.listenersAttached['toggle-rules-click'];
+  
+  return criticalSuccess;
+}
+
+// Función para intentar inicializar con reintentos y exponential backoff
+async function tryInitialize(attempts = 0): Promise<void> {
+  const maxAttempts = 10;
+  
+  logDebug(`🔄 Initialization attempt ${attempts + 1}/${maxAttempts}`);
+  
+  if (attempts >= maxAttempts) {
+    logError(`❌ Failed to initialize UI after ${maxAttempts} attempts`);
+    logError('📊 Final debug info:', debugInfo);
+    showInitializationError();
+    return;
+  }
+  
+  // Verificar si los elementos críticos existen
+  const criticalElementIds = ['analyze-selection', 'analyze-page', 'toggle-rules'];
+  const missingElements = criticalElementIds.filter(id => !document.getElementById(id));
+  
+  if (missingElements.length > 0) {
+    logDebug(`⏳ Elements not ready (missing: ${missingElements.join(', ')}), retrying...`);
+    logDebug('📋 Available elements:', Array.from(document.querySelectorAll('[id]')).map(el => el.id));
+    
+    // Exponential backoff: 100ms, 200ms, 400ms, 800ms, etc.
+    const delay = Math.min(100 * Math.pow(2, attempts), 2000);
+    logDebug(`⏰ Retrying in ${delay}ms (attempt ${attempts + 1})`);
+    
+    setTimeout(() => tryInitialize(attempts + 1), delay);
+    return;
+  }
+  
+  logDebug('✅ Critical elements found, attempting initialization...');
+  
+  try {
+    const success = await initializeUI();
+    
+    if (!success) {
+      logError('❌ Initialization failed, retrying...');
+      const delay = Math.min(100 * Math.pow(2, attempts), 2000);
+      setTimeout(() => tryInitialize(attempts + 1), delay);
+    } else {
+      logDebug('🎉 UI initialization completed successfully!');
+    }
+  } catch (error) {
+    logError('❌ Error during initialization attempt:', error);
+    const delay = Math.min(100 * Math.pow(2, attempts), 2000);
+    setTimeout(() => tryInitialize(attempts + 1), delay);
+  }
+}
+
+// Función para mostrar error de inicialización al usuario
+function showInitializationError(): void {
+  const body = document.body;
+  if (body) {
+    const errorDiv = document.createElement('div');
+    errorDiv.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      background: #ffebee;
+      border: 1px solid #f44336;
+      border-radius: 4px;
+      padding: 16px;
+      color: #c62828;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      z-index: 9999;
+    `;
+    errorDiv.innerHTML = `
+      <h3 style="margin: 0 0 8px 0;">⚠️ Error de Inicialización</h3>
+      <p style="margin: 0 0 12px 0;">El plugin no pudo inicializarse correctamente. Intentando mecanismos de recuperación...</p>
+      <div style="margin: 12px 0;">
+        <button id="manual-retry" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 8px;">
+          🔄 Reintentar Manualmente
+        </button>
+        <button id="fallback-mode" style="background: #ff9800; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+          🛠️ Modo Fallback
+        </button>
+      </div>
+      <details style="margin-top: 12px;">
+        <summary style="cursor: pointer;">Ver detalles técnicos</summary>
+        <pre style="margin: 8px 0 0 0; font-size: 11px; overflow: auto;">${JSON.stringify(debugInfo, null, 2)}</pre>
+      </details>
+    `;
+    body.appendChild(errorDiv);
+
+    // Add event listeners to error dialog buttons
+    const manualRetryBtn = errorDiv.querySelector('#manual-retry');
+    const fallbackModeBtn = errorDiv.querySelector('#fallback-mode');
+
+    if (manualRetryBtn) {
+      manualRetryBtn.addEventListener('click', () => {
+        logDebug('🔄 Manual retry requested by user');
+        errorDiv.remove();
+        tryInitialize(0); // Start fresh
+      });
+    }
+
+    if (fallbackModeBtn) {
+      fallbackModeBtn.addEventListener('click', () => {
+        logDebug('🛠️ Fallback mode requested by user');
+        errorDiv.remove();
+        initializeFallbackMode();
+      });
+    }
+  }
+}
+
+// Fallback mode with global event delegation
+function initializeFallbackMode(): void {
+  logDebug('🛠️ Initializing fallback mode with global event delegation...');
+  
+  // Create fallback notification
+  const body = document.body;
+  if (body) {
+    const fallbackDiv = document.createElement('div');
+    fallbackDiv.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      background: #fff3e0;
+      border: 1px solid #ff9800;
+      border-radius: 4px;
+      padding: 12px;
+      color: #e65100;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      z-index: 9998;
+      font-size: 12px;
+    `;
+    fallbackDiv.innerHTML = `
+      <strong>🛠️ Modo Fallback Activo</strong> - Los botones funcionan con event delegation global.
+      <button onclick="this.parentElement.remove()" style="float: right; background: none; border: none; color: #e65100; cursor: pointer;">✕</button>
+    `;
+    body.appendChild(fallbackDiv);
+  }
+
+  // Use global event delegation as fallback
+  document.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    if (!target) return;
+
+    const elementId = target.id;
+    logDebug(`🎯 Global click detected on: ${elementId}`);
+
+    switch (elementId) {
+      case 'analyze-selection':
+        logDebug('🔍 Analyze selection clicked via fallback!');
+        const enabledRules1 = Array.from(selectedRules);
+        messageHandler.sendToPlugin('analyze-selection', { enabledRules: enabledRules1 })
+          .catch(error => logError('❌ Fallback analyze-selection failed:', error));
+        break;
+
+      case 'analyze-page':
+        logDebug('📄 Analyze page clicked via fallback!');
+        const enabledRules2 = Array.from(selectedRules);
+        messageHandler.sendToPlugin('analyze-page', { enabledRules: enabledRules2 })
+          .catch(error => logError('❌ Fallback analyze-page failed:', error));
+        break;
+
+      case 'toggle-rules':
+        logDebug('⚙️ Toggle rules clicked via fallback!');
+        const rulesSection = document.getElementById('rules-config') as HTMLDivElement;
+        const toggleBtn = document.getElementById('toggle-rules') as HTMLButtonElement;
+        
+        if (rulesSection && toggleBtn) {
+          const isVisible = rulesSection.style.display !== 'none';
+          rulesSection.style.display = isVisible ? 'none' : 'block';
+          toggleBtn.textContent = isVisible ? '⚙️ Configurar Reglas' : '❌ Cerrar Configuración';
+          logDebug('📋 Rules section toggled via fallback:', isVisible ? 'hidden' : 'shown');
+        }
+        break;
+
+      case 'select-all-rules':
+        logDebug('📋 Select all rules clicked via fallback');
+        availableRules.forEach(rule => selectedRules.add(rule.id));
+        updateRulesUI();
+        break;
+
+      case 'deselect-all-rules':
+        logDebug('📋 Deselect all rules clicked via fallback');
+        selectedRules.clear();
+        updateRulesUI();
+        break;
+
+      case 'reset-rules':
+        logDebug('📋 Reset rules clicked via fallback');
+        selectedRules.clear();
+        availableRules.forEach(rule => selectedRules.add(rule.id));
+        updateRulesUI();
+        break;
+
+      case 'export-json':
+        logDebug('📤 Export JSON clicked via fallback');
+        if (lastAnalysisResults) {
+          exportToJson(lastAnalysisResults);
+        }
+        break;
+
+      case 'export-csv':
+        logDebug('📤 Export CSV clicked via fallback');
+        if (lastAnalysisResults) {
+          exportToCsv(lastAnalysisResults);
+        }
+        break;
+
+      case 'export-html':
+        logDebug('📤 Export HTML clicked via fallback');
+        if (lastAnalysisResults) {
+          exportToHtml(lastAnalysisResults);
+        }
+        break;
+
+      default:
+        // Check if it's a dynamic element (like pagination or select element buttons)
+        if (target.hasAttribute('data-action')) {
+          const action = target.getAttribute('data-action');
+          logDebug(`🎯 Dynamic action clicked via fallback: ${action}`);
+          
+          switch (action) {
+            case 'select-element':
+              const elementId = target.getAttribute('data-element-id');
+              if (elementId) {
+                selectElement(elementId);
+              }
+              break;
+            case 'go-to-page':
+              const page = parseInt(target.getAttribute('data-page') || '1');
+              goToPage(page);
+              break;
+            case 'toggle-show-all':
+              toggleShowAll();
+              break;
+          }
+        }
+        break;
+    }
+  });
+
+  // Request available rules
+  logDebug('📡 Requesting available rules from plugin (fallback mode)...');
+  messageHandler.sendToPlugin('get-available-rules')
+    .catch(error => logError('❌ Fallback get-available-rules failed:', error));
+  
+  logDebug('✅ Fallback mode initialized successfully');
+}
+
+// Inicialización usando DOMStateManager
+logDebug('🚀 Starting initialization using DOMStateManager...');
+debugInfo.domReadyState = domStateManager.getReadyState();
+
+// Strategy 1: Use DOM state manager's ready detection
+domStateManager.onReady(() => {
+  logDebug('✅ DOM ready detected by DOMStateManager');
+  debugInfo.domReadyState = domStateManager.getReadyState();
+  tryInitialize();
+});
+
+// Strategy 2: Promise-based approach for additional reliability
+domStateManager.waitForReady().then(() => {
+  logDebug('✅ DOM ready promise resolved');
+  // Only initialize if not already attempted
+  if (debugInfo.initializationAttempts === 0) {
+    debugInfo.domReadyState = domStateManager.getReadyState();
+    tryInitialize();
+  }
+}).catch((error) => {
+  logError('❌ DOM ready promise rejected:', error);
+  // Fallback to immediate initialization
+  tryInitialize();
+});
+
+// Strategy 3: Immediate check if already ready
+if (domStateManager.isReady()) {
+  logDebug('🎯 DOM already ready, initializing immediately...');
+  debugInfo.domReadyState = domStateManager.getReadyState();
+  setTimeout(() => tryInitialize(), 0); // Use setTimeout to avoid blocking
+}
+
+// Fallback strategies with improved timing
+setTimeout(() => {
+  if (debugInfo.initializationAttempts === 0 || !debugInfo.listenersAttached['analyze-selection-click']) {
+    logDebug('🔄 Fallback initialization triggered after 500ms...');
+    debugInfo.domReadyState = domStateManager.getReadyState();
+    tryInitialize();
+  }
+}, 500);
+
+setTimeout(() => {
+  if (debugInfo.initializationAttempts === 0 || !debugInfo.listenersAttached['analyze-selection-click']) {
+    logError('🚨 Final fallback initialization after 2 seconds...');
+    debugInfo.domReadyState = domStateManager.getReadyState();
+    tryInitialize();
+  }
+}, 2000);
+
+// Emergency fallback after 5 seconds
+setTimeout(() => {
+  if (!debugInfo.listenersAttached['analyze-selection-click']) {
+    logError('🆘 Emergency fallback - forcing initialization after 5 seconds');
+    debugInfo.domReadyState = domStateManager.getReadyState();
+    tryInitialize();
+  }
+}, 5000);
+
+
+
+// Escuchar mensajes del plugin
+window.onmessage = (event) => {
+  const { type, data } = event.data.pluginMessage || {};
+  
+  switch (type) {
+    case 'analysis-result':
+      displayResults(data);
+      break;
+    case 'available-rules':
+      initializeRules(data);
+      break;
+    default:
+      console.log('Unknown message type:', type);
+  }
+};
+
+
+
+/**
+ * Muestra los resultados del análisis
+ */
+function displayResults(data: any) {
+  if (!resultsContainer) {
+    console.log('Results container not found');
+    return;
+  }
+  
+  if (data.error) {
+    resultsContainer.innerHTML = `
+      <div class="error">
+        <p>${data.error}</p>
+      </div>
+    `;
+    return;
+  }
+  
+  // Resetear página actual si es un nuevo análisis
+  if (data !== lastAnalysisResults) {
+    currentPage = 1;
+    showAllIssues = false;
+  }
+  
+  const issues = data.issues || [];
+  const hasIssues = issues.length > 0;
+  
+  let html = `
+    <div class="results">
+      <h3>Resultados del Análisis</h3>
+      <div class="summary">
+        <p><strong>Elementos analizados:</strong> ${data.totalElements}</p>
+        <p><strong>Problemas encontrados:</strong> ${issues.length}</p>
+        ${data.executionTime ? `<p><strong>Tiempo de análisis:</strong> ${data.executionTime}ms</p>` : ''}
+      </div>
+  `;
+  
+  if (hasIssues) {
+    // Mostrar distribución por severidad
+    if (data.issuesBySeverity) {
+      html += `
+        <div class="severity-distribution">
+          <h4>Por Severidad:</h4>
+          <ul>
+            ${data.issuesBySeverity.high ? `<li class="severity-high">Alta: ${data.issuesBySeverity.high}</li>` : ''}
+            ${data.issuesBySeverity.medium ? `<li class="severity-medium">Media: ${data.issuesBySeverity.medium}</li>` : ''}
+            ${data.issuesBySeverity.low ? `<li class="severity-low">Baja: ${data.issuesBySeverity.low}</li>` : ''}
+          </ul>
+        </div>
+      `;
+    }
+    
+    // Mostrar distribución por categoría
+    if (data.issuesByCategory) {
+      html += `
+        <div class="category-distribution">
+          <h4>Por Categoría:</h4>
+          <ul>
+            ${Object.entries(data.issuesByCategory).map(([category, count]) => 
+              `<li class="category-${category}">${getCategoryDisplayName(category)}: ${count}</li>`
+            ).join('')}
+          </ul>
+        </div>
+      `;
+    }
+    
+    // Mostrar lista de problemas con paginación
+    html += renderIssuesList(issues);
+  } else {
+    html += `
+      <div class="no-issues">
+        <p>✅ ¡Excelente! No se encontraron problemas de UX en los elementos analizados.</p>
+      </div>
+    `;
+  }
+  
+  html += '</div>';
+  resultsContainer.innerHTML = html;
+  
+  // Agregar event listeners después de insertar el HTML
+  attachEventListeners();
+  
+  // Guardar resultados para exportación y mostrar sección de exportación
+  lastAnalysisResults = data;
+  if (exportSection) {
+    exportSection.style.display = hasIssues ? 'block' : 'none';
+  }
+}
+
+/**
+ * Convierte el nombre de categoría a un nombre más legible
+ */
+function getCategoryDisplayName(category: string): string {
+  const displayNames: Record<string, string> = {
+    'accessibility': 'Accesibilidad',
+    'readability': 'Legibilidad',
+    'layout': 'Diseño',
+    'consistency': 'Consistencia',
+    'navigation': 'Navegación',
+    'feedback': 'Retroalimentación',
+    'efficiency': 'Eficiencia'
+  };
+  
+  return displayNames[category] || category;
+}
+
+/**
+ * Formatea la información del elemento de manera legible
+ */
+function formatElementInfo(issue: any): string {
+  const elementInfo = issue.elementInfo;
+  if (!elementInfo) {
+    return `<p class="element-basic">ID: ${issue.elementId}</p>`;
+  }
+
+  let info = `<div class="element-details">`;
+  
+  // Nombre y tipo
+  info += `<p class="element-name-type">
+    <strong>${elementInfo.name}</strong> 
+    <span class="element-type">(${getElementTypeDisplayName(elementInfo.type)})</span>
+  </p>`;
+  
+  // Contenido de texto si existe
+  if (elementInfo.textContent) {
+    info += `<p class="element-text">📝 "${elementInfo.textContent}"</p>`;
+  }
+  
+  // Posición y tamaño
+  if (elementInfo.position && elementInfo.size) {
+    info += `<p class="element-dimensions">
+      📐 ${elementInfo.size.width}×${elementInfo.size.height}px 
+      en (${elementInfo.position.x}, ${elementInfo.position.y})
+    </p>`;
+  } else if (elementInfo.size) {
+    info += `<p class="element-dimensions">📐 ${elementInfo.size.width}×${elementInfo.size.height}px</p>`;
+  } else if (elementInfo.position) {
+    info += `<p class="element-dimensions">📍 Posición: (${elementInfo.position.x}, ${elementInfo.position.y})</p>`;
+  }
+  
+  info += `</div>`;
+  return info;
+}
+
+/**
+ * Convierte el tipo de elemento a un nombre más legible
+ */
+function getElementTypeDisplayName(type: string): string {
+  const typeNames: Record<string, string> = {
+    'TEXT': 'Texto',
+    'RECTANGLE': 'Rectángulo',
+    'ELLIPSE': 'Elipse',
+    'FRAME': 'Marco',
+    'GROUP': 'Grupo',
+    'COMPONENT': 'Componente',
+    'INSTANCE': 'Instancia',
+    'VECTOR': 'Vector',
+    'STAR': 'Estrella',
+    'POLYGON': 'Polígono',
+    'BOOLEAN_OPERATION': 'Operación Booleana',
+    'LINE': 'Línea'
+  };
+  
+  return typeNames[type] || type;
+}
+
+/**
+ * Renderiza la lista de issues con paginación
+ */
+function renderIssuesList(issues: any[]): string {
+  if (issues.length === 0) return '';
+  
+  // Si se está mostrando todo o hay pocos issues, mostrar todos
+  const shouldPaginate = !showAllIssues && issues.length > issuesPerPage;
+  const totalPages = Math.ceil(issues.length / issuesPerPage);
+  const startIndex = shouldPaginate ? (currentPage - 1) * issuesPerPage : 0;
+  const endIndex = shouldPaginate ? startIndex + issuesPerPage : issues.length;
+  const currentIssues = issues.slice(startIndex, endIndex);
+  
+  let html = `
+    <div class="issues-list">
+      <div class="issues-header">
+        <h4>Problemas Detectados:</h4>
+        <div class="pagination-controls">
+          ${shouldPaginate ? `
+            <div class="pagination-info">
+              Mostrando ${startIndex + 1}-${Math.min(endIndex, issues.length)} de ${issues.length} problemas
+            </div>
+            <button class="btn-show-all" data-action="toggle-show-all">
+              📋 Ver todos
+            </button>
+          ` : issues.length > issuesPerPage ? `
+            <div class="pagination-info">
+              Mostrando todos los ${issues.length} problemas
+            </div>
+            <button class="btn-show-all" data-action="toggle-show-all">
+              📄 Paginar
+            </button>
+          ` : `
+            <div class="pagination-info">
+              ${issues.length} problema${issues.length !== 1 ? 's' : ''} encontrado${issues.length !== 1 ? 's' : ''}
+            </div>
+          `}
+        </div>
+      </div>
+      <div class="issues">
+        ${currentIssues.map((issue: any) => `
+          <div class="issue issue-${issue.severity}">
+            <div class="issue-header">
+              <span class="issue-category">${getCategoryDisplayName(issue.category)}</span>
+              <span class="issue-severity severity-${issue.severity}">${issue.severity.toUpperCase()}</span>
+            </div>
+            <p class="issue-description">${issue.description}</p>
+            <div class="issue-element-info">
+              ${formatElementInfo(issue)}
+              <button class="btn-select-element" data-action="select-element" data-element-id="${issue.elementId}">
+                📍 Ir al elemento
+              </button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+  `;
+  
+  // Agregar controles de paginación si hay más de una página y no se están mostrando todos
+  if (shouldPaginate && totalPages > 1) {
+    html += `
+      <div class="pagination">
+        <button class="btn-pagination" data-action="go-to-page" data-page="1" ${currentPage === 1 ? 'disabled' : ''}>
+          ⏮️ Primera
+        </button>
+        <button class="btn-pagination" data-action="go-to-page" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>
+          ◀️ Anterior
+        </button>
+        <span class="pagination-current">
+          Página ${currentPage} de ${totalPages}
+        </span>
+        <button class="btn-pagination" data-action="go-to-page" data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''}>
+          Siguiente ▶️
+        </button>
+        <button class="btn-pagination" data-action="go-to-page" data-page="${totalPages}" ${currentPage === totalPages ? 'disabled' : ''}>
+          Última ⏭️
+        </button>
+      </div>
+    `;
+  }
+  
+  html += '</div>';
+  return html;
+}
+
+/**
+ * Navega a una página específica
+ */
+function goToPage(page: number) {
+  console.log('goToPage called with page:', page);
+  if (!lastAnalysisResults) {
+    console.log('No lastAnalysisResults available');
+    return;
+  }
+  
+  const issues = lastAnalysisResults.issues || [];
+  const totalPages = Math.ceil(issues.length / issuesPerPage);
+  
+  if (page < 1 || page > totalPages) {
+    console.log('Page out of range:', page, 'totalPages:', totalPages);
+    return;
+  }
+  
+  currentPage = page;
+  console.log('Navigating to page:', currentPage);
+  displayResults(lastAnalysisResults);
+}
+
+/**
+ * Alterna entre mostrar todos los issues y paginación
+ */
+function toggleShowAll() {
+  console.log('toggleShowAll called, current showAllIssues:', showAllIssues);
+  showAllIssues = !showAllIssues;
+  if (!showAllIssues) {
+    currentPage = 1; // Resetear a la primera página cuando se vuelve a paginar
+  }
+  console.log('New showAllIssues:', showAllIssues);
+  displayResults(lastAnalysisResults);
+}
+
+/**
+ * Selecciona un elemento en Figma
+ */
+function selectElement(elementId: string) {
+  parent.postMessage({ 
+    pluginMessage: { 
+      type: 'select-element', 
+      elementId: elementId 
+    } 
+  }, '*');
+}
+
+/**
+ * Agrega event listeners a los elementos dinámicos
+ */
+function attachEventListeners() {
+  console.log('Attaching event listeners...');
+  
+  // Event listeners para botones de paginación
+  const paginationButtons = document.querySelectorAll('[data-action="go-to-page"]');
+  console.log('Found pagination buttons:', paginationButtons.length);
+  paginationButtons.forEach(button => {
+    button.addEventListener('click', (e) => {
+      const target = e.target as HTMLButtonElement;
+      if (target.disabled) return;
+      
+      const page = parseInt(target.getAttribute('data-page') || '1');
+      goToPage(page);
+    });
+  });
+  
+  // Event listener para botón de mostrar todos
+  const showAllButtons = document.querySelectorAll('[data-action="toggle-show-all"]');
+  console.log('Found show-all buttons:', showAllButtons.length);
+  showAllButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      toggleShowAll();
+    });
+  });
+  
+  // Event listeners para botones de seleccionar elemento
+  const selectElementButtons = document.querySelectorAll('[data-action="select-element"]');
+  console.log('Found select-element buttons:', selectElementButtons.length);
+  selectElementButtons.forEach(button => {
+    button.addEventListener('click', (e) => {
+      const target = e.target as HTMLButtonElement;
+      const elementId = target.getAttribute('data-element-id');
+      if (elementId) {
+        selectElement(elementId);
+      }
+    });
+  });
+}
+
+// Exponer funciones globalmente para compatibilidad (por si acaso)
+(window as any).goToPage = goToPage;
+(window as any).toggleShowAll = toggleShowAll;
+(window as any).selectElement = selectElement;
+
+/**
+ * Funciones de exportación
+ */
+
+/**
+ * Exporta los resultados a formato JSON
+ */
+function exportToJson(data: any) {
+  const exportData = {
+    timestamp: new Date().toISOString(),
+    summary: {
+      totalElements: data.totalElements,
+      totalIssues: data.issues.length,
+      executionTime: data.executionTime
+    },
+    distribution: {
+      byCategory: data.issuesByCategory,
+      bySeverity: data.issuesBySeverity
+    },
+    issues: data.issues.map((issue: any) => ({
+      id: issue.id,
+      elementId: issue.elementId,
+      elementInfo: issue.elementInfo,
+      category: issue.category,
+      severity: issue.severity,
+      description: issue.description,
+      ruleId: issue.ruleId
+    }))
+  };
+  
+  const jsonString = JSON.stringify(exportData, null, 2);
+  downloadFile(jsonString, 'ux-analysis-results.json', 'application/json');
+}
+
+/**
+ * Exporta los resultados a formato CSV
+ */
+function exportToCsv(data: any) {
+  const headers = ['ID', 'Elemento', 'Nombre', 'Tipo', 'Posición', 'Tamaño', 'Texto', 'Categoría', 'Severidad', 'Descripción', 'Regla'];
+  const rows = data.issues.map((issue: any) => [
+    issue.id,
+    issue.elementId,
+    issue.elementInfo?.name || 'Sin nombre',
+    getElementTypeDisplayName(issue.elementInfo?.type || ''),
+    issue.elementInfo?.position ? `(${issue.elementInfo.position.x}, ${issue.elementInfo.position.y})` : '',
+    issue.elementInfo?.size ? `${issue.elementInfo.size.width}×${issue.elementInfo.size.height}` : '',
+    issue.elementInfo?.textContent || '',
+    getCategoryDisplayName(issue.category),
+    issue.severity.toUpperCase(),
+    issue.description.replace(/"/g, '""'), // Escapar comillas
+    issue.ruleId
+  ]);
+  
+  const csvContent = [
+    headers.join(','),
+    ...rows.map((row: string[]) => row.map((cell: string) => `"${cell}"`).join(','))
+  ].join('\n');
+  
+  downloadFile(csvContent, 'ux-analysis-results.csv', 'text/csv');
+}
+
+/**
+ * Exporta los resultados a formato HTML
+ */
+function exportToHtml(data: any) {
+  const timestamp = new Date().toLocaleString();
+  const issues = data.issues || [];
+  
+  const htmlContent = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte de Análisis UX - ${timestamp}</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; line-height: 1.6; }
+        .header { border-bottom: 2px solid #0066cc; padding-bottom: 20px; margin-bottom: 30px; }
+        .summary { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        .summary-item { text-align: center; }
+        .summary-number { font-size: 2em; font-weight: bold; color: #0066cc; }
+        .issue { border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 15px; }
+        .issue-high { border-left: 4px solid #c62828; }
+        .issue-medium { border-left: 4px solid #ef6c00; }
+        .issue-low { border-left: 4px solid #7b1fa2; }
+        .issue-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .issue-category { background: #e3f2fd; color: #1976d2; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; }
+        .severity-high { background: #c62828; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; }
+        .severity-medium { background: #ef6c00; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; }
+        .severity-low { background: #7b1fa2; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; }
+        .element-id { font-family: monospace; background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }
+        .element-info-html { background: #f8f9fa; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        .element-type-html { color: #666; font-weight: normal; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 Reporte de Análisis UX</h1>
+        <p>Generado el: ${timestamp}</p>
+    </div>
+    
+    <div class="summary">
+        <h2>Resumen del Análisis</h2>
+        <div class="summary-grid">
+            <div class="summary-item">
+                <div class="summary-number">${data.totalElements}</div>
+                <div>Elementos Analizados</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-number">${issues.length}</div>
+                <div>Problemas Encontrados</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-number">${data.executionTime || 0}ms</div>
+                <div>Tiempo de Análisis</div>
+            </div>
+        </div>
+    </div>
+    
+    ${issues.length > 0 ? `
+    <h2>Problemas Detectados</h2>
+    ${issues.map((issue: any) => `
+    <div class="issue issue-${issue.severity}">
+        <div class="issue-header">
+            <span class="issue-category">${getCategoryDisplayName(issue.category)}</span>
+            <span class="severity-${issue.severity}">${issue.severity.toUpperCase()}</span>
+        </div>
+        <h3>${issue.description}</h3>
+        <div class="element-info-html">
+            <p><strong>Elemento:</strong> ${issue.elementInfo?.name || 'Sin nombre'} 
+               <span class="element-type-html">(${getElementTypeDisplayName(issue.elementInfo?.type || '')})</span></p>
+            ${issue.elementInfo?.textContent ? `<p><strong>Texto:</strong> "${issue.elementInfo.textContent}"</p>` : ''}
+            ${issue.elementInfo?.position && issue.elementInfo?.size ? 
+              `<p><strong>Dimensiones:</strong> ${issue.elementInfo.size.width}×${issue.elementInfo.size.height}px en (${issue.elementInfo.position.x}, ${issue.elementInfo.position.y})</p>` : ''}
+            <p><strong>ID:</strong> <span class="element-id">${issue.elementId}</span></p>
+        </div>
+        <p><strong>Regla:</strong> ${issue.ruleId}</p>
+    </div>
+    `).join('')}
+    ` : '<p>✅ No se encontraron problemas de UX.</p>'}
+    
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0; color: #666; font-size: 0.9em;">
+        <p>Reporte generado por UX Smells Detector</p>
+    </div>
+</body>
+</html>`;
+  
+  downloadFile(htmlContent, 'ux-analysis-report.html', 'text/html');
+}
+
+/**
+ * Función auxiliar para descargar archivos
+ */
+function downloadFile(content: string, filename: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Inicializa las reglas disponibles
+ */
+function initializeRules(rules: any[]) {
+  availableRules = rules;
+  
+  // Seleccionar todas las reglas por defecto
+  selectedRules.clear();
+  rules.forEach(rule => selectedRules.add(rule.id));
+  
+  renderRulesConfig();
+}
+
+/**
+ * Renderiza la configuración de reglas
+ */
+function renderRulesConfig() {
+  const categories = {
+    'accessibility': 'accessibility-rules',
+    'readability': 'readability-rules',
+    'layout': 'layout-rules',
+    'consistency': 'consistency-rules',
+    'navigation': 'navigation-rules',
+    'feedback': 'feedback-rules',
+    'efficiency': 'efficiency-rules'
+  };
+
+  // Limpiar contenedores
+  Object.values(categories).forEach(containerId => {
+    const container = document.getElementById(containerId);
+    if (container) {
+      container.innerHTML = '';
+    }
+  });
+
+  // Agrupar reglas por categoría
+  const rulesByCategory: Record<string, any[]> = {};
+  availableRules.forEach(rule => {
+    if (!rulesByCategory[rule.category]) {
+      rulesByCategory[rule.category] = [];
+    }
+    rulesByCategory[rule.category].push(rule);
+  });
+
+  // Renderizar reglas por categoría
+  Object.entries(rulesByCategory).forEach(([category, rules]) => {
+    const containerId = categories[category as keyof typeof categories];
+    const container = document.getElementById(containerId);
+    
+    if (container) {
+      rules.forEach(rule => {
+        const ruleItem = document.createElement('div');
+        ruleItem.className = 'rule-item';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'rule-checkbox';
+        checkbox.id = `rule-${rule.id}`;
+        checkbox.checked = selectedRules.has(rule.id);
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) {
+            selectedRules.add(rule.id);
+          } else {
+            selectedRules.delete(rule.id);
+          }
+        });
+        
+        const label = document.createElement('label');
+        label.className = 'rule-label';
+        label.htmlFor = `rule-${rule.id}`;
+        label.textContent = rule.name;
+        
+        const severity = document.createElement('span');
+        severity.className = `rule-severity ${rule.severity}`;
+        severity.textContent = rule.severity.toUpperCase();
+        
+        ruleItem.appendChild(checkbox);
+        ruleItem.appendChild(label);
+        ruleItem.appendChild(severity);
+        
+        container.appendChild(ruleItem);
+      });
+    }
+  });
+}
+
+/**
+ * Actualiza la UI de reglas
+ */
+function updateRulesUI() {
+  availableRules.forEach(rule => {
+    const checkbox = document.getElementById(`rule-${rule.id}`) as HTMLInputElement;
+    if (checkbox) {
+      checkbox.checked = selectedRules.has(rule.id);
+    }
+  });
+}

@@ -1,0 +1,2056 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>UX Smells Detector</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 16px;
+      background: #ffffff;
+    }
+    
+    .header {
+      margin-bottom: 24px;
+    }
+    
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+      color: #333;
+    }
+    
+    .header p {
+      font-size: 14px;
+      color: #666;
+      margin: 0;
+    }
+    
+    .actions {
+      margin-bottom: 24px;
+    }
+    
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 8px;
+      background: #0066cc;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    
+    .btn:hover {
+      background: #0052a3;
+    }
+    
+    .btn:active {
+      background: #003d7a;
+    }
+    
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+    
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+    
+    #results {
+      border-top: 1px solid #e0e0e0;
+      padding-top: 16px;
+    }
+    
+    .results h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0 0 12px 0;
+      color: #333;
+    }
+    
+    .results p {
+      font-size: 14px;
+      color: #666;
+      margin: 0 0 8px 0;
+    }
+    
+    .error {
+      background: #fff2f2;
+      border: 1px solid #ffcccc;
+      border-radius: 6px;
+      padding: 12px;
+      color: #cc0000;
+    }
+    
+    .error p {
+      margin: 0;
+      font-size: 14px;
+    }
+    
+    .summary {
+      background: #f8f9fa;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+    
+    .summary p {
+      margin: 0 0 4px 0;
+    }
+    
+    .summary p:last-child {
+      margin-bottom: 0;
+    }
+    
+    .severity-distribution,
+    .category-distribution {
+      margin-bottom: 16px;
+    }
+    
+    .severity-distribution h4,
+    .category-distribution h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+      color: #333;
+    }
+    
+    .severity-distribution ul,
+    .category-distribution ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    .severity-distribution li,
+    .category-distribution li {
+      padding: 4px 8px;
+      margin-bottom: 4px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    
+    .severity-high {
+      background: #ffebee;
+      color: #c62828;
+    }
+    
+    .severity-medium {
+      background: #fff3e0;
+      color: #ef6c00;
+    }
+    
+    .severity-low {
+      background: #f3e5f5;
+      color: #7b1fa2;
+    }
+    
+    .issues-list h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 12px 0;
+      color: #333;
+    }
+    
+    .issue {
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 8px;
+      background: white;
+    }
+    
+    .issue-high {
+      border-left: 4px solid #c62828;
+    }
+    
+    .issue-medium {
+      border-left: 4px solid #ef6c00;
+    }
+    
+    .issue-low {
+      border-left: 4px solid #7b1fa2;
+    }
+    
+    .issue-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .issue-category {
+      font-size: 12px;
+      font-weight: 500;
+      color: #666;
+      text-transform: uppercase;
+    }
+    
+    .issue-severity {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
+    
+    .issue-severity.severity-high {
+      background: #c62828;
+      color: white;
+    }
+    
+    .issue-severity.severity-medium {
+      background: #ef6c00;
+      color: white;
+    }
+    
+    .issue-severity.severity-low {
+      background: #7b1fa2;
+      color: white;
+    }
+    
+    .issue-description {
+      font-size: 14px;
+      color: #333;
+      margin: 0 0 8px 0;
+      line-height: 1.4;
+    }
+    
+    .issue-element {
+      font-size: 12px;
+      color: #666;
+      margin: 0;
+      font-family: monospace;
+    }
+    
+    .issue-element-info {
+      background: #f8f9fa;
+      border-radius: 4px;
+      padding: 8px;
+      margin-top: 8px;
+    }
+    
+    .element-details {
+      margin-bottom: 8px;
+    }
+    
+    .element-name-type {
+      margin: 0 0 4px 0;
+      font-size: 13px;
+    }
+    
+    .element-type {
+      color: #666;
+      font-weight: normal;
+      font-size: 11px;
+    }
+    
+    .element-text {
+      margin: 0 0 4px 0;
+      font-size: 12px;
+      color: #555;
+      font-style: italic;
+    }
+    
+    .element-dimensions {
+      margin: 0 0 4px 0;
+      font-size: 11px;
+      color: #777;
+      font-family: monospace;
+    }
+    
+    .element-basic {
+      margin: 0;
+      font-size: 12px;
+      color: #666;
+      font-family: monospace;
+    }
+    
+    .btn-select-element {
+      background: #e3f2fd;
+      color: #1976d2;
+      border: 1px solid #bbdefb;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-select-element:hover {
+      background: #bbdefb;
+      border-color: #90caf9;
+    }
+    
+    .btn-select-element:active {
+      background: #90caf9;
+    }
+    
+    .issues-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    
+    .pagination-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .pagination-info {
+      font-size: 12px;
+      color: #666;
+      font-style: italic;
+    }
+    
+    .btn-show-all {
+      background: #e8f5e8;
+      color: #2e7d32;
+      border: 1px solid #c8e6c9;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-show-all:hover {
+      background: #c8e6c9;
+      border-color: #a5d6a7;
+    }
+    
+    .btn-show-all:active {
+      background: #a5d6a7;
+    }
+    
+    .pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      margin-top: 16px;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 6px;
+    }
+    
+    .btn-pagination {
+      background: #ffffff;
+      color: #333;
+      border: 1px solid #d0d0d0;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-pagination:hover:not(:disabled) {
+      background: #e3f2fd;
+      border-color: #bbdefb;
+      color: #1976d2;
+    }
+    
+    .btn-pagination:active:not(:disabled) {
+      background: #bbdefb;
+    }
+    
+    .btn-pagination:disabled {
+      background: #f5f5f5;
+      color: #999;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+    
+    .pagination-current {
+      font-size: 13px;
+      font-weight: 500;
+      color: #333;
+      margin: 0 8px;
+    }
+    
+    .more-issues {
+      text-align: center;
+      color: #666;
+      font-style: italic;
+      margin: 12px 0 0 0;
+    }
+    
+    .no-issues {
+      text-align: center;
+      padding: 24px 12px;
+      background: #e8f5e8;
+      border-radius: 6px;
+      color: #2e7d32;
+    }
+    
+    .no-issues p {
+      margin: 0;
+      font-size: 14px;
+    }
+    
+    .export-section {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid #e0e0e0;
+    }
+    
+    .export-section h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 12px 0;
+      color: #333;
+    }
+    
+    .export-buttons {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .btn-export {
+      flex: 1;
+      padding: 8px 12px;
+      font-size: 12px;
+      background: #f0f0f0;
+      color: #333;
+      border: 1px solid #d0d0d0;
+    }
+    
+    .btn-export:hover {
+      background: #e0e0e0;
+      border-color: #c0c0c0;
+    }
+    
+    .btn-config {
+      background: #f3e5f5;
+      color: #7b1fa2;
+    }
+    
+    .btn-config:hover {
+      background: #e1bee7;
+    }
+    
+    .rules-config {
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+      background: #fafafa;
+    }
+    
+    .rules-config h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0 0 16px 0;
+      color: #333;
+    }
+    
+    .rules-categories {
+      margin-bottom: 16px;
+    }
+    
+    .category-section {
+      margin-bottom: 16px;
+    }
+    
+    .category-section h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+      color: #555;
+    }
+    
+    .rules-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-left: 16px;
+    }
+    
+    .rule-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+    }
+    
+    .rule-checkbox {
+      margin: 0;
+    }
+    
+    .rule-label {
+      font-size: 13px;
+      color: #666;
+      cursor: pointer;
+      flex: 1;
+    }
+    
+    .rule-severity {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    
+    .rule-severity.high {
+      background: #ffebee;
+      color: #c62828;
+    }
+    
+    .rule-severity.medium {
+      background: #fff3e0;
+      color: #ef6c00;
+    }
+    
+    .rule-severity.low {
+      background: #f3e5f5;
+      color: #7b1fa2;
+    }
+    
+    .rules-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      padding-top: 12px;
+      border-top: 1px solid #e0e0e0;
+    }
+    
+    .btn-small {
+      padding: 6px 12px;
+      font-size: 12px;
+      background: #f0f0f0;
+      color: #333;
+      border: 1px solid #d0d0d0;
+    }
+    
+    .btn-small:hover {
+      background: #e0e0e0;
+      border-color: #c0c0c0;
+    }
+    
+    /* Animation for button feedback */
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+    
+    .btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>UX Smells Detector</h1>
+    <p>Detecta problemas de usabilidad en tu diseño</p>
+  </div>
+  
+  <div class="actions">
+    <button id="analyze-selection" class="btn">
+      Analizar Selección
+    </button>
+    <button id="analyze-page" class="btn btn-secondary">
+      Analizar Página Completa
+    </button>
+    <button id="toggle-rules" class="btn btn-config">
+      ⚙️ Configurar Reglas
+    </button>
+  </div>
+  
+  <div id="rules-config" class="rules-config" style="display: none;">
+    <h3>Seleccionar Reglas de Análisis</h3>
+    <div class="rules-categories">
+      <div class="category-section">
+        <h4>🔍 Accesibilidad</h4>
+        <div class="rules-list" id="accessibility-rules"></div>
+      </div>
+      <div class="category-section">
+        <h4>📖 Legibilidad</h4>
+        <div class="rules-list" id="readability-rules"></div>
+      </div>
+      <div class="category-section">
+        <h4>🎨 Diseño</h4>
+        <div class="rules-list" id="layout-rules"></div>
+      </div>
+      <div class="category-section">
+        <h4>🔄 Consistencia</h4>
+        <div class="rules-list" id="consistency-rules"></div>
+      </div>
+      <div class="category-section">
+        <h4>🧭 Navegación</h4>
+        <div class="rules-list" id="navigation-rules"></div>
+      </div>
+      <div class="category-section">
+        <h4>💬 Retroalimentación</h4>
+        <div class="rules-list" id="feedback-rules"></div>
+      </div>
+      <div class="category-section">
+        <h4>⚡ Eficiencia</h4>
+        <div class="rules-list" id="efficiency-rules"></div>
+      </div>
+    </div>
+    <div class="rules-actions">
+      <button id="select-all-rules" class="btn btn-small">Seleccionar Todas</button>
+      <button id="deselect-all-rules" class="btn btn-small">Deseleccionar Todas</button>
+      <button id="reset-rules" class="btn btn-small">Restaurar Predeterminadas</button>
+    </div>
+  </div>
+  
+  <div id="results">
+    <!-- Los resultados aparecerán aquí -->
+  </div>
+  
+  <div id="export-section" class="export-section" style="display: none;">
+    <h4>Exportar Resultados</h4>
+    <div class="export-buttons">
+      <button id="export-json" class="btn btn-export">JSON</button>
+      <button id="export-csv" class="btn btn-export">CSV</button>
+      <button id="export-html" class="btn btn-export">HTML</button>
+    </div>
+  </div>
+  
+  <script>
+    // UI principal del plugin - JavaScript inline
+    console.log('🚀 UX Smells Detector UI loaded');
+
+    // Variables globales
+    var lastAnalysisResults = null;
+    var currentPage = 1;
+    var issuesPerPage = 10;
+    var showAllIssues = false;
+    var availableRules = [];
+    var selectedRules = new Set();
+
+    // RetryManager - Retry mechanism with exponential backoff
+    var RetryManager = {
+      // Retry element finding with exponential backoff
+      findElementWithRetry: function(elementId, maxRetries, callback) {
+        maxRetries = maxRetries || 10;
+        var attempt = 0;
+        var baseDelay = 100; // Start with 100ms
+        
+        var tryFind = function() {
+          attempt++;
+          console.log('🔍 Attempting to find element:', elementId, 'attempt:', attempt);
+          
+          var element = document.getElementById(elementId);
+          if (element) {
+            console.log('✅ Element found:', elementId, 'after', attempt, 'attempts');
+            callback({ success: true, element: element, attempts: attempt });
+            return;
+          }
+          
+          if (attempt >= maxRetries) {
+            console.warn('⚠️ Element not found after', maxRetries, 'attempts:', elementId);
+            callback({ success: false, element: null, attempts: attempt });
+            return;
+          }
+          
+          // Exponential backoff: delay = baseDelay * 2^(attempt-1)
+          var delay = baseDelay * Math.pow(2, attempt - 1);
+          delay = Math.min(delay, 2000); // Cap at 2 seconds
+          
+          console.log('⏳ Retrying in', delay + 'ms...');
+          setTimeout(tryFind, delay);
+        };
+        
+        tryFind();
+      },
+      
+      // Retry listener attachment with exponential backoff
+      attachListenerWithRetry: function(config, maxRetries, callback) {
+        var self = this;
+        maxRetries = maxRetries || 5;
+        
+        this.findElementWithRetry(config.id, maxRetries, function(result) {
+          if (!result.success) {
+            callback({ 
+              success: false, 
+              reason: 'element_not_found_after_retry',
+              attempts: result.attempts 
+            });
+            return;
+          }
+          
+          // Element found, now try to attach listener
+          var handler = UIEventManager.handlers[config.handler];
+          if (!handler) {
+            callback({ 
+              success: false, 
+              reason: 'handler_not_found',
+              attempts: result.attempts 
+            });
+            return;
+          }
+          
+          try {
+            var wrappedHandler = UIEventManager.createHandlerWithFeedback(handler, result.element);
+            result.element.addEventListener(config.event, wrappedHandler);
+            
+            // Store listener info
+            UIEventManager.listeners.push({
+              element: result.element,
+              event: config.event,
+              handler: wrappedHandler,
+              config: config
+            });
+            
+            console.log('✅ Listener attached with retry:', config.id, 'attempts:', result.attempts);
+            callback({ 
+              success: true, 
+              attempts: result.attempts,
+              element: result.element 
+            });
+          } catch (error) {
+            console.error('❌ Error attaching listener after retry:', config.id, error);
+            callback({ 
+              success: false, 
+              reason: 'attachment_error',
+              attempts: result.attempts,
+              error: error 
+            });
+          }
+        });
+      },
+      
+      // Retry multiple operations with different strategies
+      retryMultipleOperations: function(operations, callback) {
+        var results = [];
+        var completed = 0;
+        var total = operations.length;
+        
+        if (total === 0) {
+          callback(results);
+          return;
+        }
+        
+        for (var i = 0; i < operations.length; i++) {
+          (function(operation, index) {
+            var maxRetries = operation.critical ? 10 : 3;
+            
+            RetryManager.attachListenerWithRetry(operation.config, maxRetries, function(result) {
+              results[index] = {
+                operation: operation,
+                result: result
+              };
+              
+              completed++;
+              if (completed === total) {
+                callback(results);
+              }
+            });
+          })(operations[i], i);
+        }
+      }
+    };
+
+    // UIEventManager - Centralized Event Listener Management
+    var UIEventManager = {
+      listeners: [],
+      
+      // Element configuration with required/optional elements
+      elementConfig: {
+        required: [
+          { id: 'analyze-selection', event: 'click', handler: 'handleAnalyzeSelection' },
+          { id: 'analyze-page', event: 'click', handler: 'handleAnalyzePage' },
+          { id: 'toggle-rules', event: 'click', handler: 'handleToggleRules' }
+        ],
+        optional: [
+          { id: 'select-all-rules', event: 'click', handler: 'handleSelectAllRules' },
+          { id: 'deselect-all-rules', event: 'click', handler: 'handleDeselectAllRules' },
+          { id: 'reset-rules', event: 'click', handler: 'handleResetRules' },
+          { id: 'export-json', event: 'click', handler: 'handleExportJSON' },
+          { id: 'export-csv', event: 'click', handler: 'handleExportCSV' },
+          { id: 'export-html', event: 'click', handler: 'handleExportHTML' }
+        ]
+      },
+      
+      // Event handlers with enhanced feedback and error handling
+      handlers: {
+        handleAnalyzeSelection: function(event) {
+          console.log('🔍 Analyze selection clicked!');
+          var button = event.target;
+          
+          try {
+            // Disable button during processing
+            button.disabled = true;
+            button.textContent = 'Analizando...';
+            
+            // Clear previous results
+            var resultsContainer = document.getElementById('results');
+            if (resultsContainer) {
+              resultsContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">🔍 Analizando selección...</div>';
+            }
+            
+            var enabledRules = Array.from(selectedRules);
+            console.log('📋 Enabled rules for analysis:', enabledRules.length);
+            
+            // Send message to plugin
+            try {
+              parent.postMessage({ 
+                pluginMessage: { 
+                  type: 'analyze-selection',
+                  enabledRules: enabledRules
+                } 
+              }, '*');
+              console.log('✅ Message sent to plugin: analyze-selection');
+            } catch (error) {
+              console.error('❌ Error sending message to plugin:', error);
+            }
+            
+            // Re-enable button after delay
+            setTimeout(function() {
+              button.disabled = false;
+              button.textContent = 'Analizar Selección';
+            }, 2000);
+            
+          } catch (error) {
+            console.error('❌ Error in analyze selection handler:', error);
+            button.disabled = false;
+            button.textContent = 'Analizar Selección';
+            
+            // Show error message
+            var resultsContainer = document.getElementById('results');
+            if (resultsContainer) {
+              resultsContainer.innerHTML = '<div style="color: red; padding: 10px; border: 1px solid red; border-radius: 4px;">Error al iniciar análisis: ' + error.message + '</div>';
+            }
+          }
+        },
+        
+        handleAnalyzePage: function(event) {
+          console.log('📄 Analyze page clicked!');
+          var button = event.target;
+          
+          try {
+            // Disable button during processing
+            button.disabled = true;
+            button.textContent = 'Analizando...';
+            
+            // Clear previous results
+            var resultsContainer = document.getElementById('results');
+            if (resultsContainer) {
+              resultsContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">📄 Analizando página completa...</div>';
+            }
+            
+            var enabledRules = Array.from(selectedRules);
+            console.log('📋 Enabled rules for page analysis:', enabledRules.length);
+            
+            // Send message to plugin
+            try {
+              parent.postMessage({ 
+                pluginMessage: { 
+                  type: 'analyze-page',
+                  enabledRules: enabledRules
+                } 
+              }, '*');
+              console.log('✅ Message sent to plugin: analyze-page');
+            } catch (error) {
+              console.error('❌ Error sending message to plugin:', error);
+            }
+            
+            // Re-enable button after delay
+            setTimeout(function() {
+              button.disabled = false;
+              button.textContent = 'Analizar Página Completa';
+            }, 3000);
+            
+          } catch (error) {
+            console.error('❌ Error in analyze page handler:', error);
+            button.disabled = false;
+            button.textContent = 'Analizar Página Completa';
+            
+            // Show error message
+            var resultsContainer = document.getElementById('results');
+            if (resultsContainer) {
+              resultsContainer.innerHTML = '<div style="color: red; padding: 10px; border: 1px solid red; border-radius: 4px;">Error al iniciar análisis: ' + error.message + '</div>';
+            }
+          }
+        },
+        
+        handleToggleRules: function(event) {
+          console.log('⚙️ Toggle rules clicked!');
+          event.preventDefault();
+          event.stopPropagation();
+          
+          var button = event.target || event.currentTarget;
+          
+          try {
+            var rulesConfigSection = document.getElementById('rules-config');
+            if (!rulesConfigSection) {
+              console.warn('⚠️ Rules config section not found');
+              alert('Error: No se encontró la sección de configuración');
+              return;
+            }
+            
+            // Get current visibility state more reliably
+            var currentDisplay = window.getComputedStyle(rulesConfigSection).display;
+            var isCurrentlyVisible = currentDisplay !== 'none';
+            
+            console.log('📊 Current state - display:', currentDisplay, 'visible:', isCurrentlyVisible);
+            
+            if (isCurrentlyVisible) {
+              // Hide the section
+              rulesConfigSection.style.display = 'none';
+              button.innerHTML = '⚙️ Configurar Reglas';
+              console.log('✅ Rules section hidden');
+            } else {
+              // Show the section
+              rulesConfigSection.style.display = 'block';
+              button.innerHTML = '❌ Cerrar Configuración';
+              
+              // Add smooth animation
+              rulesConfigSection.style.opacity = '0';
+              rulesConfigSection.style.transform = 'translateY(-10px)';
+              
+              setTimeout(function() {
+                rulesConfigSection.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                rulesConfigSection.style.opacity = '1';
+                rulesConfigSection.style.transform = 'translateY(0)';
+              }, 10);
+              
+              console.log('✅ Rules section shown');
+            }
+            
+            // Visual feedback for button
+            button.style.transform = 'scale(0.95)';
+            setTimeout(function() {
+              button.style.transform = 'scale(1)';
+            }, 150);
+            
+          } catch (error) {
+            console.error('❌ Error in toggle rules handler:', error);
+            alert('Error al alternar configuración: ' + error.message);
+          }
+        },
+        
+        handleSelectAllRules: function() {
+          console.log('✅ Select all rules clicked');
+          window.selectAllRules();
+        },
+        
+        handleDeselectAllRules: function() {
+          console.log('❌ Deselect all rules clicked');
+          window.deselectAllRules();
+        },
+        
+        handleResetRules: function() {
+          console.log('🔄 Reset rules clicked');
+          window.resetRules();
+        },
+        
+        handleExportJSON: function() {
+          console.log('📄 Export JSON clicked');
+          // Implementation will be added in export functionality task
+        },
+        
+        handleExportCSV: function() {
+          console.log('📊 Export CSV clicked');
+          // Implementation will be added in export functionality task
+        },
+        
+        handleExportHTML: function() {
+          console.log('🌐 Export HTML clicked');
+          // Implementation will be added in export functionality task
+        }
+      },
+      
+      // Setup all event listeners with retry mechanism
+      setupAllListeners: function() {
+        console.log('🔧 Setting up all event listeners with retry mechanism...');
+        
+        var self = this;
+        var setupResults = {
+          required: { success: 0, failed: 0, missing: [] },
+          optional: { success: 0, failed: 0, missing: [] }
+        };
+        
+        // Prepare operations for retry mechanism
+        var operations = [];
+        
+        // Add required operations
+        for (var i = 0; i < this.elementConfig.required.length; i++) {
+          operations.push({
+            config: this.elementConfig.required[i],
+            critical: true,
+            type: 'required'
+          });
+        }
+        
+        // Add optional operations
+        for (var i = 0; i < this.elementConfig.optional.length; i++) {
+          operations.push({
+            config: this.elementConfig.optional[i],
+            critical: false,
+            type: 'optional'
+          });
+        }
+        
+        // Use retry mechanism for all operations
+        RetryManager.retryMultipleOperations(operations, function(results) {
+          // Process results
+          for (var i = 0; i < results.length; i++) {
+            var item = results[i];
+            var operation = item.operation;
+            var result = item.result;
+            
+            if (operation.type === 'required') {
+              if (result.success) {
+                setupResults.required.success++;
+              } else {
+                setupResults.required.failed++;
+                setupResults.required.missing.push(operation.config.id);
+              }
+            } else {
+              if (result.success) {
+                setupResults.optional.success++;
+              } else {
+                setupResults.optional.failed++;
+                setupResults.optional.missing.push(operation.config.id);
+              }
+            }
+          }
+          
+          console.log('📊 Event listener setup results (with retry):', setupResults);
+          
+          // Log warnings for missing required elements
+          if (setupResults.required.missing.length > 0) {
+            console.warn('⚠️ Missing required elements after retry:', setupResults.required.missing);
+          }
+          
+          // Verify listeners after setup
+          setTimeout(function() {
+            self.verifyListeners();
+          }, 100);
+        });
+        
+        return setupResults;
+      },
+      
+      // Fallback setup method (original implementation)
+      setupAllListenersImmediate: function() {
+        console.log('🔧 Setting up all event listeners (immediate, no retry)...');
+        
+        var setupResults = {
+          required: { success: 0, failed: 0, missing: [] },
+          optional: { success: 0, failed: 0, missing: [] }
+        };
+        
+        // Setup required listeners
+        for (var i = 0; i < this.elementConfig.required.length; i++) {
+          var config = this.elementConfig.required[i];
+          var result = this.attachListener(config);
+          if (result.success) {
+            setupResults.required.success++;
+          } else {
+            setupResults.required.failed++;
+            setupResults.required.missing.push(config.id);
+          }
+        }
+        
+        // Setup optional listeners
+        for (var i = 0; i < this.elementConfig.optional.length; i++) {
+          var config = this.elementConfig.optional[i];
+          var result = this.attachListener(config);
+          if (result.success) {
+            setupResults.optional.success++;
+          } else {
+            setupResults.optional.failed++;
+            setupResults.optional.missing.push(config.id);
+          }
+        }
+        
+        console.log('📊 Event listener setup results (immediate):', setupResults);
+        
+        // Log warnings for missing required elements
+        if (setupResults.required.missing.length > 0) {
+          console.warn('⚠️ Missing required elements:', setupResults.required.missing);
+        }
+        
+        return setupResults;
+      },
+      
+      // Attach individual event listener
+      attachListener: function(config) {
+        var element = document.getElementById(config.id);
+        if (!element) {
+          console.warn('⚠️ Element not found:', config.id);
+          return { success: false, reason: 'element_not_found' };
+        }
+        
+        var handler = this.handlers[config.handler];
+        if (!handler) {
+          console.error('❌ Handler not found:', config.handler);
+          return { success: false, reason: 'handler_not_found' };
+        }
+        
+        try {
+          // Add visual feedback wrapper
+          var wrappedHandler = this.createHandlerWithFeedback(handler, element);
+          element.addEventListener(config.event, wrappedHandler);
+          
+          // Store listener info for cleanup
+          this.listeners.push({
+            element: element,
+            event: config.event,
+            handler: wrappedHandler,
+            config: config
+          });
+          
+          console.log('✅ Listener attached:', config.id, config.event);
+          return { success: true };
+        } catch (error) {
+          console.error('❌ Error attaching listener:', config.id, error);
+          return { success: false, reason: 'attachment_error', error: error };
+        }
+      },
+      
+      // Create handler with visual feedback
+      createHandlerWithFeedback: function(originalHandler, element) {
+        return function(event) {
+          // Add visual feedback
+          element.style.animation = 'pulse 0.3s ease-in-out';
+          setTimeout(function() {
+            element.style.animation = '';
+          }, 300);
+          
+          // Execute original handler
+          try {
+            originalHandler.call(this, event);
+          } catch (error) {
+            console.error('❌ Error in event handler:', error);
+          }
+        };
+      },
+      
+      // Verify all listeners are working
+      verifyListeners: function() {
+        console.log('🔍 Verifying event listeners...');
+        var verificationResults = [];
+        
+        for (var i = 0; i < this.listeners.length; i++) {
+          var listener = this.listeners[i];
+          var element = listener.element;
+          var isAttached = element && element.parentNode;
+          
+          verificationResults.push({
+            id: listener.config.id,
+            event: listener.config.event,
+            attached: isAttached,
+            elementExists: !!element
+          });
+        }
+        
+        console.log('📋 Listener verification results:', verificationResults);
+        return verificationResults;
+      },
+      
+      // Cleanup all listeners (prevent memory leaks)
+      cleanup: function() {
+        console.log('🧹 Cleaning up event listeners...');
+        for (var i = 0; i < this.listeners.length; i++) {
+          var listener = this.listeners[i];
+          if (listener.element) {
+            listener.element.removeEventListener(listener.event, listener.handler);
+          }
+        }
+        this.listeners = [];
+        console.log('✅ Event listeners cleaned up');
+      }
+    };
+
+    // DOMStateManager - Robust DOM ready detection system
+    var DOMStateManager = {
+      isReady: false,
+      callbacks: [],
+      
+      // Check if DOM is ready using multiple strategies
+      checkDOMReady: function() {
+        return document.readyState === 'complete' || 
+               document.readyState === 'interactive' ||
+               (document.body && document.getElementById('analyze-selection'));
+      },
+      
+      // Add callback to be executed when DOM is ready
+      onReady: function(callback) {
+        if (this.isReady || this.checkDOMReady()) {
+          console.log('🟢 DOM already ready, executing callback immediately');
+          this.isReady = true;
+          callback();
+          return;
+        }
+        
+        console.log('🟡 DOM not ready, queuing callback');
+        this.callbacks.push(callback);
+        this.setupListeners();
+      },
+      
+      // Setup multiple DOM ready detection strategies
+      setupListeners: function() {
+        var self = this;
+        
+        // Strategy 1: DOMContentLoaded event
+        if (document.addEventListener) {
+          document.addEventListener('DOMContentLoaded', function() {
+            console.log('📋 DOMContentLoaded event fired');
+            self.markReady();
+          });
+        }
+        
+        // Strategy 2: window.onload event (fallback)
+        window.addEventListener('load', function() {
+          console.log('🪟 Window load event fired');
+          self.markReady();
+        });
+        
+        // Strategy 3: Polling mechanism (last resort)
+        this.startPolling();
+      },
+      
+      // Start polling for DOM readiness
+      startPolling: function() {
+        var self = this;
+        var pollCount = 0;
+        var maxPolls = 50; // 5 seconds max
+        
+        var pollInterval = setInterval(function() {
+          pollCount++;
+          console.log('🔄 Polling DOM readiness, attempt:', pollCount);
+          
+          if (self.checkDOMReady()) {
+            console.log('✅ DOM ready detected via polling');
+            clearInterval(pollInterval);
+            self.markReady();
+          } else if (pollCount >= maxPolls) {
+            console.warn('⚠️ DOM polling timeout, forcing initialization');
+            clearInterval(pollInterval);
+            self.markReady();
+          }
+        }, 100);
+      },
+      
+      // Mark DOM as ready and execute all callbacks
+      markReady: function() {
+        if (this.isReady) return;
+        
+        console.log('🎯 Marking DOM as ready, executing', this.callbacks.length, 'callbacks');
+        this.isReady = true;
+        
+        // Execute all queued callbacks
+        while (this.callbacks.length > 0) {
+          var callback = this.callbacks.shift();
+          try {
+            callback();
+          } catch (error) {
+            console.error('❌ Error executing DOM ready callback:', error);
+          }
+        }
+      },
+      
+      // Promise-based API for waiting for DOM ready
+      ready: function() {
+        var self = this;
+        return new Promise(function(resolve) {
+          self.onReady(resolve);
+        });
+      }
+    };
+
+    // PluginMessageHandler - Robust plugin message communication
+    var PluginMessageHandler = {
+      messageQueue: [],
+      isPluginReady: false,
+      messageId: 0,
+      pendingMessages: new Map(),
+      
+      // Send message to plugin with queuing and error handling
+      sendToPlugin: function(type, data, options) {
+        options = options || {};
+        var messageId = ++this.messageId;
+        
+        var message = {
+          id: messageId,
+          type: type,
+          data: data || {},
+          timestamp: Date.now(),
+          retries: 0,
+          maxRetries: options.maxRetries || 3
+        };
+        
+        console.log('📡 Preparing message for plugin:', type, 'ID:', messageId);
+        
+        if (this.isPluginReady || options.force) {
+          this.sendMessageImmediate(message);
+        } else {
+          console.log('🔄 Plugin not ready, queuing message:', messageId);
+          this.messageQueue.push(message);
+          
+          // Try to detect if plugin is ready
+          this.checkPluginReadiness();
+        }
+        
+        return messageId;
+      },
+      
+      // Send message immediately
+      sendMessageImmediate: function(message) {
+        try {
+          var payload = {
+            pluginMessage: {
+              id: message.id,
+              type: message.type,
+              enabledRules: message.data.enabledRules || [],
+              timestamp: message.timestamp
+            }
+          };
+          
+          console.log('📤 Sending message to plugin:', payload);
+          parent.postMessage(payload, '*');
+          
+          // Store pending message for acknowledgment tracking
+          this.pendingMessages.set(message.id, message);
+          
+          // Set timeout for message acknowledgment
+          setTimeout(function() {
+            if (PluginMessageHandler.pendingMessages.has(message.id)) {
+              console.warn('⚠️ Message not acknowledged within timeout:', message.id);
+              PluginMessageHandler.handleMessageTimeout(message);
+            }
+          }, 5000);
+          
+          console.log('✅ Message sent successfully, ID:', message.id);
+          
+        } catch (error) {
+          console.error('❌ Error sending message:', message.id, error);
+          this.handleMessageError(message, error);
+        }
+      },
+      
+      // Handle message timeout
+      handleMessageTimeout: function(message) {
+        this.pendingMessages.delete(message.id);
+        
+        if (message.retries < message.maxRetries) {
+          message.retries++;
+          console.log('🔄 Retrying message:', message.id, 'attempt:', message.retries);
+          
+          // Exponential backoff for retries
+          var delay = Math.pow(2, message.retries) * 1000;
+          setTimeout(function() {
+            PluginMessageHandler.sendMessageImmediate(message);
+          }, delay);
+        } else {
+          console.error('❌ Message failed after max retries:', message.id);
+          this.handleMessageFailure(message, 'timeout');
+        }
+      },
+      
+      // Handle message error
+      handleMessageError: function(message, error) {
+        if (message.retries < message.maxRetries) {
+          message.retries++;
+          console.log('🔄 Retrying message after error:', message.id, 'attempt:', message.retries);
+          
+          setTimeout(function() {
+            PluginMessageHandler.sendMessageImmediate(message);
+          }, 1000 * message.retries);
+        } else {
+          console.error('❌ Message failed permanently:', message.id, error);
+          this.handleMessageFailure(message, 'error', error);
+        }
+      },
+      
+      // Handle permanent message failure
+      handleMessageFailure: function(message, reason, error) {
+        console.error('💥 Permanent message failure:', message.id, reason, error);
+        
+        // Show user-friendly error message
+        var resultsContainer = document.getElementById('results');
+        if (resultsContainer) {
+          var errorMsg = 'Error de comunicación con el plugin. ';
+          if (reason === 'timeout') {
+            errorMsg += 'El plugin no responde. Intenta recargar el plugin.';
+          } else {
+            errorMsg += 'Error interno: ' + (error ? error.message : 'desconocido');
+          }
+          
+          resultsContainer.innerHTML = '<div style="color: red; padding: 10px; border: 1px solid red; border-radius: 4px; background: #fff2f2;">' + errorMsg + '</div>';
+        }
+      },
+      
+      // Check if plugin is ready
+      checkPluginReadiness: function() {
+        console.log('🔍 Checking plugin readiness...');
+        
+        // Send a ping message to check if plugin responds
+        var pingId = this.sendToPlugin('ping', {}, { force: true, maxRetries: 1 });
+        
+        // If no response within 2 seconds, assume plugin is not ready
+        setTimeout(function() {
+          if (PluginMessageHandler.pendingMessages.has(pingId)) {
+            console.log('📵 Plugin not responding to ping');
+            PluginMessageHandler.pendingMessages.delete(pingId);
+          }
+        }, 2000);
+      },
+      
+      // Process queued messages when plugin becomes ready
+      processMessageQueue: function() {
+        console.log('🚀 Processing message queue, count:', this.messageQueue.length);
+        
+        while (this.messageQueue.length > 0) {
+          var message = this.messageQueue.shift();
+          this.sendMessageImmediate(message);
+        }
+      },
+      
+      // Handle message acknowledgment from plugin
+      handleMessageAck: function(messageId) {
+        if (this.pendingMessages.has(messageId)) {
+          console.log('✅ Message acknowledged:', messageId);
+          this.pendingMessages.delete(messageId);
+        }
+      },
+      
+      // Mark plugin as ready
+      markPluginReady: function() {
+        if (!this.isPluginReady) {
+          console.log('🟢 Plugin marked as ready');
+          this.isPluginReady = true;
+          this.processMessageQueue();
+        }
+      }
+    };
+
+    // Legacy function for backward compatibility
+    function sendToPlugin(type, data) {
+      return PluginMessageHandler.sendToPlugin(type, data);
+    }
+
+    // Función para configurar event listeners usando UIEventManager con retry
+    function setupEventListeners() {
+      console.log('🔧 Setting up event listeners using UIEventManager with retry mechanism...');
+      
+      // Try immediate setup first for fast initialization
+      var immediateResults = UIEventManager.setupAllListenersImmediate();
+      var totalRequired = UIEventManager.elementConfig.required.length;
+      var totalOptional = UIEventManager.elementConfig.optional.length;
+      
+      console.log('📊 Immediate setup results:');
+      console.log('  Required:', immediateResults.required.success + '/' + totalRequired, 'successful');
+      console.log('  Optional:', immediateResults.optional.success + '/' + totalOptional, 'successful');
+      
+      // If some required elements failed, use retry mechanism
+      if (immediateResults.required.failed > 0) {
+        console.log('🔄 Some required elements failed, initiating retry mechanism...');
+        
+        // Clear existing listeners to avoid duplicates
+        UIEventManager.cleanup();
+        
+        // Use retry mechanism for robust setup
+        UIEventManager.setupAllListeners();
+      } else {
+        console.log('✅ All required elements setup successfully on first try');
+        
+        // Still verify listeners
+        setTimeout(function() {
+          UIEventManager.verifyListeners();
+        }, 100);
+      }
+      
+      return immediateResults;
+    }
+
+    // Función para mostrar resultados con paginación y información detallada
+    function displayResults(data) {
+      console.log('📊 Displaying results:', data);
+      var resultsContainer = document.getElementById('results');
+      if (!resultsContainer) {
+        console.log('Results container not found');
+        return;
+      }
+      
+      if (data.error) {
+        resultsContainer.innerHTML = '<div style="color: red; padding: 10px; border: 1px solid red; border-radius: 4px;">' + data.error + '</div>';
+        return;
+      }
+      
+      var issues = data.issues || [];
+      var hasIssues = issues.length > 0;
+      
+      // Reset pagination
+      currentPage = 1;
+      showAllIssues = false;
+      
+      var html = '<div><h3>📊 Resultados del Análisis</h3>';
+      html += '<div class="summary">';
+      html += '<p><strong>Elementos analizados:</strong> ' + data.totalElements + '</p>';
+      html += '<p><strong>Problemas encontrados:</strong> ' + issues.length + '</p>';
+      if (data.executionTime) {
+        html += '<p><strong>Tiempo de análisis:</strong> ' + data.executionTime + 'ms</p>';
+      }
+      html += '</div>';
+      
+      if (hasIssues) {
+        // Add severity distribution
+        if (data.issuesBySeverity) {
+          html += '<div class="severity-distribution">';
+          html += '<h4>Distribución por Severidad</h4>';
+          html += '<ul>';
+          if (data.issuesBySeverity.high > 0) {
+            html += '<li class="severity-high">Alta: ' + data.issuesBySeverity.high + ' problemas</li>';
+          }
+          if (data.issuesBySeverity.medium > 0) {
+            html += '<li class="severity-medium">Media: ' + data.issuesBySeverity.medium + ' problemas</li>';
+          }
+          if (data.issuesBySeverity.low > 0) {
+            html += '<li class="severity-low">Baja: ' + data.issuesBySeverity.low + ' problemas</li>';
+          }
+          html += '</ul>';
+          html += '</div>';
+        }
+        
+        // Add category distribution
+        if (data.issuesByCategory) {
+          html += '<div class="category-distribution">';
+          html += '<h4>Distribución por Categoría</h4>';
+          html += '<ul>';
+          for (var category in data.issuesByCategory) {
+            if (data.issuesByCategory[category] > 0) {
+              html += '<li>' + getCategoryDisplayName(category) + ': ' + data.issuesByCategory[category] + ' problemas</li>';
+            }
+          }
+          html += '</ul>';
+          html += '</div>';
+        }
+        
+        html += renderIssuesList(issues);
+      } else {
+        html += '<div class="no-issues">';
+        html += '<p>✅ ¡Excelente! No se encontraron problemas de UX en los elementos analizados.</p>';
+        html += '</div>';
+      }
+      
+      html += '</div>';
+      resultsContainer.innerHTML = html;
+      
+      // Setup pagination event listeners
+      setupPaginationListeners();
+      
+      // Setup element selection listeners
+      setupElementSelectionListeners();
+      
+      // Show export section if there are results
+      var exportSection = document.getElementById('export-section');
+      if (exportSection) {
+        exportSection.style.display = hasIssues ? 'block' : 'none';
+      }
+      
+      // Guardar resultados
+      lastAnalysisResults = data;
+    }
+    
+    // Función para renderizar la lista de issues con paginación
+    function renderIssuesList(issues) {
+      var html = '<div class="issues-list">';
+      
+      // Issues header with pagination controls
+      html += '<div class="issues-header">';
+      html += '<h4>Problemas Detectados</h4>';
+      html += '<div class="pagination-controls">';
+      
+      if (issues.length > issuesPerPage && !showAllIssues) {
+        var totalPages = Math.ceil(issues.length / issuesPerPage);
+        html += '<span class="pagination-info">Página ' + currentPage + ' de ' + totalPages + '</span>';
+        html += '<button class="btn-show-all" onclick="window.showAllIssuesToggle()">Ver Todos</button>';
+      } else if (showAllIssues && issues.length > issuesPerPage) {
+        html += '<span class="pagination-info">Mostrando todos los ' + issues.length + ' problemas</span>';
+        html += '<button class="btn-show-all" onclick="window.showAllIssuesToggle()">Paginar</button>';
+      }
+      
+      html += '</div>';
+      html += '</div>';
+      
+      // Determine which issues to show
+      var issuesToShow = issues;
+      if (!showAllIssues && issues.length > issuesPerPage) {
+        var startIndex = (currentPage - 1) * issuesPerPage;
+        var endIndex = startIndex + issuesPerPage;
+        issuesToShow = issues.slice(startIndex, endIndex);
+      }
+      
+      // Render issues
+      for (var i = 0; i < issuesToShow.length; i++) {
+        html += renderSingleIssue(issuesToShow[i], i);
+      }
+      
+      // Pagination controls
+      if (!showAllIssues && issues.length > issuesPerPage) {
+        html += renderPaginationControls(issues.length);
+      }
+      
+      html += '</div>';
+      return html;
+    }
+    
+    // Función para renderizar un issue individual con información detallada
+    function renderSingleIssue(issue, index) {
+      var severityColor = issue.severity === "high" ? "#c62828" : issue.severity === "medium" ? "#ef6c00" : "#7b1fa2";
+      var severityClass = 'issue-' + issue.severity;
+      
+      var html = '<div class="issue ' + severityClass + '">';
+      
+      // Issue header
+      html += '<div class="issue-header">';
+      html += '<span class="issue-category">' + getCategoryDisplayName(issue.category) + '</span>';
+      html += '<span class="issue-severity severity-' + issue.severity + '">' + issue.severity.toUpperCase() + '</span>';
+      html += '</div>';
+      
+      // Issue description
+      html += '<div class="issue-description">' + issue.description + '</div>';
+      
+      // Element information
+      html += '<div class="issue-element-info">';
+      html += '<div class="element-details">';
+      
+      // Element name and type
+      if (issue.elementName) {
+        html += '<p class="element-name-type"><strong>' + issue.elementName + '</strong> <span class="element-type">(' + (issue.elementType || 'Elemento') + ')</span></p>';
+      } else {
+        html += '<p class="element-name-type"><strong>ID:</strong> ' + issue.elementId + ' <span class="element-type">(' + (issue.elementType || 'Elemento') + ')</span></p>';
+      }
+      
+      // Element text content (if available)
+      if (issue.elementText && issue.elementText.trim()) {
+        html += '<p class="element-text">"' + truncateText(issue.elementText, 100) + '"</p>';
+      }
+      
+      // Element dimensions (if available)
+      if (issue.elementWidth && issue.elementHeight) {
+        html += '<p class="element-dimensions">Dimensiones: ' + Math.round(issue.elementWidth) + ' × ' + Math.round(issue.elementHeight) + ' px</p>';
+      }
+      
+      // Element position (if available)
+      if (issue.elementX !== undefined && issue.elementY !== undefined) {
+        html += '<p class="element-dimensions">Posición: (' + Math.round(issue.elementX) + ', ' + Math.round(issue.elementY) + ')</p>';
+      }
+      
+      html += '</div>';
+      
+      // Select element button
+      html += '<button class="btn-select-element" data-element-id="' + issue.elementId + '" onclick="window.selectElementInFigma(\'' + issue.elementId + '\')">';
+      html += '🎯 Seleccionar en Figma';
+      html += '</button>';
+      
+      html += '</div>';
+      html += '</div>';
+      
+      return html;
+    }
+    
+    // Función para renderizar controles de paginación
+    function renderPaginationControls(totalIssues) {
+      var totalPages = Math.ceil(totalIssues / issuesPerPage);
+      
+      console.log('📄 Rendering pagination controls - Current page:', currentPage, 'Total pages:', totalPages, 'Total issues:', totalIssues);
+      
+      var html = '<div class="pagination">';
+      
+      // Previous button
+      var prevDisabled = currentPage <= 1;
+      html += '<button class="btn-pagination" onclick="window.changePage(' + (currentPage - 1) + ')" ' + (prevDisabled ? 'disabled' : '') + '>Anterior</button>';
+      
+      // Page info
+      html += '<span class="pagination-current">Página ' + currentPage + ' de ' + totalPages + '</span>';
+      
+      // Next button
+      var nextDisabled = currentPage >= totalPages;
+      html += '<button class="btn-pagination" onclick="window.changePage(' + (currentPage + 1) + ')" ' + (nextDisabled ? 'disabled' : '') + '>Siguiente</button>';
+      
+      html += '</div>';
+      
+      console.log('📄 Pagination HTML generated:', html);
+      
+      return html;
+    }
+
+    // Función para obtener nombre de categoría legible
+    function getCategoryDisplayName(category) {
+      var displayNames = {
+        "accessibility": "Accesibilidad",
+        "readability": "Legibilidad",
+        "layout": "Diseño",
+        "consistency": "Consistencia",
+        "navigation": "Navegación",
+        "feedback": "Retroalimentación",
+        "efficiency": "Eficiencia"
+      };
+      return displayNames[category] || category;
+    }
+    
+    // Función para truncar texto
+    function truncateText(text, maxLength) {
+      if (text.length <= maxLength) return text;
+      return text.substring(0, maxLength) + '...';
+    }
+    
+    // Función para cambiar página - Global
+    window.changePage = function(newPage) {
+      console.log('📄 Changing to page:', newPage);
+      if (!lastAnalysisResults || !lastAnalysisResults.issues) {
+        console.warn('No analysis results available for pagination');
+        return;
+      }
+      
+      var totalPages = Math.ceil(lastAnalysisResults.issues.length / issuesPerPage);
+      if (newPage < 1 || newPage > totalPages) {
+        console.warn('Invalid page number:', newPage, 'Total pages:', totalPages);
+        return;
+      }
+      
+      currentPage = newPage;
+      console.log('Current page set to:', currentPage);
+      displayResults(lastAnalysisResults);
+    }
+    
+    // Función para alternar mostrar todos los issues - Global
+    window.showAllIssuesToggle = function() {
+      console.log('🔄 Toggling show all issues. Current state:', showAllIssues);
+      showAllIssues = !showAllIssues;
+      if (showAllIssues) {
+        currentPage = 1;
+      }
+      console.log('New state - showAllIssues:', showAllIssues, 'currentPage:', currentPage);
+      displayResults(lastAnalysisResults);
+    }
+    
+    // Función para seleccionar elemento en Figma - Global
+    window.selectElementInFigma = function(elementId) {
+      console.log('🎯 Selecting element in Figma:', elementId);
+      
+      try {
+        parent.postMessage({ 
+          pluginMessage: { 
+            type: 'select-element',
+            elementId: elementId
+          } 
+        }, '*');
+        console.log('✅ Message sent to select element:', elementId);
+        
+        // Visual feedback
+        var button = document.querySelector('[data-element-id="' + elementId + '"]');
+        if (button) {
+          var originalText = button.textContent;
+          button.textContent = '✅ Seleccionado';
+          button.style.background = '#4caf50';
+          button.style.borderColor = '#45a049';
+          
+          setTimeout(function() {
+            button.textContent = originalText;
+            button.style.background = '';
+            button.style.borderColor = '';
+          }, 2000);
+        }
+        
+      } catch (error) {
+        console.error('❌ Error selecting element:', error);
+      }
+    }
+    
+    // Función para configurar listeners de paginación
+    function setupPaginationListeners() {
+      // Los listeners se configuran mediante onclick en el HTML generado
+      console.log('📄 Pagination listeners configured via onclick');
+    }
+    
+    // Función para configurar listeners de selección de elementos
+    function setupElementSelectionListeners() {
+      // Los listeners se configuran mediante onclick en el HTML generado
+      console.log('🎯 Element selection listeners configured via onclick');
+    }
+    
+    // Función para alternar una regla individual - Global
+    window.toggleRule = function(ruleId) {
+      console.log('🔄 Toggling rule:', ruleId);
+      
+      if (selectedRules.has(ruleId)) {
+        selectedRules.delete(ruleId);
+        console.log('❌ Rule disabled:', ruleId);
+      } else {
+        selectedRules.add(ruleId);
+        console.log('✅ Rule enabled:', ruleId);
+      }
+      
+      console.log('📋 Currently selected rules:', Array.from(selectedRules));
+    }
+    
+    // Función para seleccionar todas las reglas - Global
+    window.selectAllRules = function() {
+      console.log('✅ Selecting all rules');
+      
+      selectedRules.clear();
+      for (var i = 0; i < availableRules.length; i++) {
+        selectedRules.add(availableRules[i].id);
+      }
+      
+      // Actualizar checkboxes
+      var checkboxes = document.querySelectorAll('.rule-checkbox');
+      for (var i = 0; i < checkboxes.length; i++) {
+        checkboxes[i].checked = true;
+      }
+      
+      console.log('📋 All rules selected:', Array.from(selectedRules));
+    }
+    
+    // Función para deseleccionar todas las reglas - Global
+    window.deselectAllRules = function() {
+      console.log('❌ Deselecting all rules');
+      
+      selectedRules.clear();
+      
+      // Actualizar checkboxes
+      var checkboxes = document.querySelectorAll('.rule-checkbox');
+      for (var i = 0; i < checkboxes.length; i++) {
+        checkboxes[i].checked = false;
+      }
+      
+      console.log('📋 All rules deselected');
+    }
+    
+    // Función para restaurar reglas predeterminadas - Global
+    window.resetRules = function() {
+      console.log('🔄 Resetting to default rules');
+      
+      selectedRules.clear();
+      for (var i = 0; i < availableRules.length; i++) {
+        var rule = availableRules[i];
+        // Por defecto, habilitar todas las reglas
+        selectedRules.add(rule.id);
+      }
+      
+      // Actualizar checkboxes
+      var checkboxes = document.querySelectorAll('.rule-checkbox');
+      for (var i = 0; i < checkboxes.length; i++) {
+        checkboxes[i].checked = true;
+      }
+      
+      console.log('📋 Rules reset to default:', Array.from(selectedRules));
+    }
+
+    // Función para inicializar reglas
+    function initializeRules(rules) {
+      console.log('📋 Initializing rules:', rules);
+      availableRules = rules;
+      selectedRules.clear();
+      
+      // Agrupar reglas por categoría
+      var rulesByCategory = {
+        accessibility: [],
+        readability: [],
+        layout: [],
+        consistency: [],
+        navigation: [],
+        feedback: [],
+        efficiency: []
+      };
+      
+      for (var i = 0; i < rules.length; i++) {
+        var rule = rules[i];
+        selectedRules.add(rule.id);
+        
+        if (rulesByCategory[rule.category]) {
+          rulesByCategory[rule.category].push(rule);
+        }
+      }
+      
+      // Poblar cada sección de categoría
+      populateRulesSection('accessibility-rules', rulesByCategory.accessibility);
+      populateRulesSection('readability-rules', rulesByCategory.readability);
+      populateRulesSection('layout-rules', rulesByCategory.layout);
+      populateRulesSection('consistency-rules', rulesByCategory.consistency);
+      populateRulesSection('navigation-rules', rulesByCategory.navigation);
+      populateRulesSection('feedback-rules', rulesByCategory.feedback);
+      populateRulesSection('efficiency-rules', rulesByCategory.efficiency);
+      
+      console.log('✅ Rules UI populated successfully');
+    }
+    
+    // Función para poblar una sección de reglas
+    function populateRulesSection(sectionId, rules) {
+      var section = document.getElementById(sectionId);
+      if (!section) {
+        console.warn('⚠️ Rules section not found:', sectionId);
+        return;
+      }
+      
+      if (rules.length === 0) {
+        section.innerHTML = '<p style="color: #999; font-style: italic; margin: 8px 0;">No hay reglas en esta categoría</p>';
+        return;
+      }
+      
+      var html = '';
+      for (var i = 0; i < rules.length; i++) {
+        var rule = rules[i];
+        var severityClass = 'rule-severity ' + rule.severity;
+        var isChecked = selectedRules.has(rule.id) ? 'checked' : '';
+        
+        html += '<div class="rule-item">';
+        html += '<input type="checkbox" class="rule-checkbox" id="rule-' + rule.id + '" ' + isChecked + ' onchange="toggleRule(\'' + rule.id + '\')">';
+        html += '<label for="rule-' + rule.id + '" class="rule-label">' + rule.name + '</label>';
+        html += '<span class="' + severityClass + '">' + rule.severity.toUpperCase() + '</span>';
+        html += '</div>';
+      }
+      
+      section.innerHTML = html;
+    }
+
+    // Enhanced message listener with acknowledgment handling
+    window.onmessage = function(event) {
+      var message = event.data.pluginMessage;
+      if (!message) return;
+      
+      console.log('📨 Received message from plugin:', message.type, 'ID:', message.id);
+      
+      // Simple message handling without acknowledgment system for now
+      
+      // Plugin is ready when we receive any message
+      
+      // Handle regular messages
+      switch (message.type) {
+        case 'analysis-result':
+          displayResults(message.data);
+          break;
+        case 'available-rules':
+          initializeRules(message.data);
+          break;
+        case 'error':
+          handlePluginError(message.data);
+          break;
+        default:
+          console.log('Unknown message type:', message.type);
+      }
+    };
+    
+    // Handle plugin errors
+    function handlePluginError(errorData) {
+      console.error('🚨 Plugin error received:', errorData);
+      
+      var resultsContainer = document.getElementById('results');
+      if (resultsContainer) {
+        var errorMsg = 'Error del plugin: ' + (errorData.message || 'Error desconocido');
+        resultsContainer.innerHTML = '<div style="color: red; padding: 10px; border: 1px solid red; border-radius: 4px; background: #fff2f2;">' + errorMsg + '</div>';
+      }
+    }
+
+    // Inicialización mejorada usando DOMStateManager
+    function initialize() {
+      console.log('🚀 Initializing UX Smells Detector UI...');
+      
+      // Verify critical elements exist
+      var criticalElements = [
+        'analyze-selection',
+        'analyze-page', 
+        'toggle-rules',
+        'results'
+      ];
+      
+      var missingElements = [];
+      for (var i = 0; i < criticalElements.length; i++) {
+        var element = document.getElementById(criticalElements[i]);
+        if (!element) {
+          missingElements.push(criticalElements[i]);
+        }
+      }
+      
+      if (missingElements.length > 0) {
+        console.error('❌ Critical elements missing:', missingElements);
+        // Continue anyway, but log the issue
+      } else {
+        console.log('✅ All critical elements found');
+      }
+      
+      setupEventListeners();
+      
+      // Request available rules from plugin
+      try {
+        parent.postMessage({ 
+          pluginMessage: { 
+            type: 'get-available-rules'
+          } 
+        }, '*');
+        console.log('✅ Requested available rules from plugin');
+      } catch (error) {
+        console.error('❌ Error requesting rules from plugin:', error);
+      }
+      
+      console.log('✅ UI initialization completed');
+    }
+
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initialize);
+    } else {
+      initialize();
+    }
+    
+    // Fallback initialization
+    setTimeout(initialize, 1000);
+    
+    // EMERGENCY FALLBACK: Ensure toggle button works no matter what
+    function emergencyToggleSetup() {
+      console.log('🚨 Setting up emergency toggle button fallback...');
+      
+      var toggleBtn = document.getElementById('toggle-rules');
+      var rulesConfig = document.getElementById('rules-config');
+      
+      if (toggleBtn && rulesConfig) {
+        // Remove any existing listeners to avoid conflicts
+        var newBtn = toggleBtn.cloneNode(true);
+        toggleBtn.parentNode.replaceChild(newBtn, toggleBtn);
+        
+        // Add simple, reliable event listener
+        newBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          console.log('🚨 Emergency toggle activated!');
+          
+          var currentDisplay = window.getComputedStyle(rulesConfig).display;
+          var isVisible = currentDisplay !== 'none';
+          
+          if (isVisible) {
+            rulesConfig.style.display = 'none';
+            newBtn.innerHTML = '⚙️ Configurar Reglas';
+          } else {
+            rulesConfig.style.display = 'block';
+            newBtn.innerHTML = '❌ Cerrar Configuración';
+          }
+          
+          console.log('🚨 Emergency toggle completed:', isVisible ? 'hidden' : 'shown');
+        });
+        
+        console.log('✅ Emergency toggle setup completed');
+      } else {
+        console.warn('⚠️ Emergency toggle setup failed - elements not found');
+      }
+    }
+    
+    // Set up emergency fallback after a delay
+    setTimeout(emergencyToggleSetup, 2000);
+    setTimeout(emergencyToggleSetup, 5000); // Double fallback
+  </script>
+  
+</body>
+</html>
